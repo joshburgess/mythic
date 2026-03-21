@@ -8,4 +8,9 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tera = "1"
+handlebars = "6"
+walkdir = "2"
 mythic-core = { path = "../mythic-core" }
+
+[dev-dependencies]
+tempfile = "3"
