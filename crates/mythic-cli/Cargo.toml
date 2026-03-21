@@ -11,3 +11,4 @@ mythic-markdown = { path = "../mythic-markdown" }
 mythic-template = { path = "../mythic-template" }
 mythic-assets = { path = "../mythic-assets" }
 mythic-server = { path = "../mythic-server" }
+tokio = { version = "1", features = ["full"] }
