@@ -17,6 +17,27 @@ pub struct SiteConfig {
     pub template_dir: PathBuf,
     #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
+    #[serde(default = "default_static_dir")]
+    pub static_dir: PathBuf,
+    #[serde(default = "default_styles_dir")]
+    pub styles_dir: PathBuf,
+    #[serde(default = "default_scripts_dir")]
+    pub scripts_dir: PathBuf,
+    #[serde(default)]
+    pub image_breakpoints: Option<Vec<u32>>,
+    #[serde(default)]
+    pub sass: Option<SassConfig>,
+}
+
+/// Sass/SCSS compilation configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SassConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_content_dir() -> PathBuf {
@@ -33,6 +54,37 @@ fn default_template_dir() -> PathBuf {
 
 fn default_data_dir() -> PathBuf {
     PathBuf::from("_data")
+}
+
+fn default_static_dir() -> PathBuf {
+    PathBuf::from("static")
+}
+
+fn default_styles_dir() -> PathBuf {
+    PathBuf::from("styles")
+}
+
+fn default_scripts_dir() -> PathBuf {
+    PathBuf::from("scripts")
+}
+
+impl SiteConfig {
+    /// Create a config suitable for tests.
+    pub fn for_testing(title: &str, base_url: &str) -> Self {
+        SiteConfig {
+            title: title.to_string(),
+            base_url: base_url.to_string(),
+            content_dir: default_content_dir(),
+            output_dir: default_output_dir(),
+            template_dir: default_template_dir(),
+            data_dir: default_data_dir(),
+            static_dir: default_static_dir(),
+            styles_dir: default_styles_dir(),
+            scripts_dir: default_scripts_dir(),
+            image_breakpoints: None,
+            sass: None,
+        }
+    }
 }
 
 /// Load site configuration from a TOML file.

@@ -111,14 +111,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn fixture_config() -> SiteConfig {
-        SiteConfig {
-            title: "Test".to_string(),
-            base_url: "http://localhost".to_string(),
-            content_dir: PathBuf::from("content"),
-            output_dir: PathBuf::from("public"),
-            template_dir: PathBuf::from("templates"),
-            data_dir: PathBuf::from("_data"),
-        }
+        SiteConfig::for_testing("Test", "http://localhost")
     }
 
     #[test]

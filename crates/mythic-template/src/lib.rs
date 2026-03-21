@@ -23,6 +23,16 @@ impl TemplateEngine {
 
     /// Render a page using its specified layout template.
     pub fn render(&self, page: &Page, config: &SiteConfig) -> Result<String> {
+        self.render_with_assets(page, config, None)
+    }
+
+    /// Render a page with optional asset manifest context.
+    pub fn render_with_assets(
+        &self,
+        page: &Page,
+        config: &SiteConfig,
+        assets: Option<&serde_json::Value>,
+    ) -> Result<String> {
         let layout = page
             .frontmatter
             .layout
@@ -41,6 +51,11 @@ impl TemplateEngine {
         site.insert("title", config.title.as_str());
         site.insert("base_url", config.base_url.as_str());
         ctx.insert("site", &site);
+
+        // Asset paths
+        if let Some(assets) = assets {
+            ctx.insert("assets", assets);
+        }
 
         self.tera
             .render(&template_name, &ctx)
@@ -71,14 +86,7 @@ mod tests {
     }
 
     fn test_config() -> SiteConfig {
-        SiteConfig {
-            title: "My Site".to_string(),
-            base_url: "http://localhost:3000".to_string(),
-            content_dir: PathBuf::from("content"),
-            output_dir: PathBuf::from("public"),
-            template_dir: PathBuf::from("templates"),
-            data_dir: PathBuf::from("_data"),
-        }
+        SiteConfig::for_testing("My Site", "http://localhost:3000")
     }
 
     #[test]
