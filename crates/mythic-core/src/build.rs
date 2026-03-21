@@ -123,17 +123,25 @@ where
         }
     }
 
-    // Parallel file writes
+    // Pre-create all output directories in one pass to avoid
+    // redundant create_dir_all calls during parallel writes.
+    {
+        let mut dirs: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
+        for page in &to_write {
+            let dest = output_dir.join(&page.slug);
+            dirs.insert(dest);
+        }
+        for dir in &dirs {
+            std::fs::create_dir_all(dir)?;
+        }
+    }
+
+    // Parallel file writes (directories already exist)
     let write_errors: Vec<_> = to_write
         .par_iter()
         .filter_map(|page| {
             let html = page.rendered_html.as_ref().unwrap();
             let dest = output_dir.join(&page.slug).join("index.html");
-            if let Some(parent) = dest.parent() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
-                    return Some(e.into());
-                }
-            }
             if let Err(e) = std::fs::write(&dest, html) {
                 return Some(e.into());
             }
