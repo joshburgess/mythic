@@ -360,4 +360,43 @@ mod tests {
         assert!(feed.contains("https://mysite.org/feed.xml"));
         assert!(!feed.contains("http://example.com"));
     }
+
+    #[test]
+    fn feed_with_empty_title_config() {
+        // Zola issue #2024: empty feed title should not produce invalid XML
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = feed_config();
+        config.feed.as_mut().unwrap().title = String::new();
+        let pages = vec![page("Post", "p", "2024-01-01", vec![])];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        // Should still generate valid XML (even with empty title)
+        let result = generate_feeds(&config, &pages, &taxonomies, dir.path());
+        assert!(result.is_ok());
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert!(feed.contains("<title>"));
+    }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn feed_with_control_characters_does_not_panic() {
+        // Hugo #3268: XML control characters in content must not crash feed generation.
+        // NOTE: Currently the feed output still contains raw control chars, which
+        // produces technically invalid XML. A future fix should strip them in
+        // render_atom_feed or escape_xml. This test documents the current behavior
+        // and ensures the generation itself does not panic or error.
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let mut p = page("Post with control", "ctrl", "2024-01-01", vec![]);
+        p.rendered_html = Some("Text with \x0B vertical tab and \x00 null".to_string());
+        let pages = vec![p];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        let result = generate_feeds(&config, &pages, &taxonomies, dir.path());
+        assert!(result.is_ok());
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        // The feed is generated and contains the entry
+        assert!(feed.contains("Post with control"));
+    }
 }

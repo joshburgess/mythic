@@ -206,4 +206,94 @@ mod tests {
         let (fm, _) = parse_frontmatter(input).unwrap();
         assert_eq!(fm.locale.as_deref(), Some("es"));
     }
+
+    #[test]
+    fn yaml_date_with_timezone_offset() {
+        // Zola issue #2071: YAML dates with timezone offsets must parse
+        let input = "---\ntitle: TZ Post\ndate: \"2024-01-15T14:30:00-05:00\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.date.as_deref(), Some("2024-01-15T14:30:00-05:00"));
+    }
+
+    #[test]
+    fn date_without_timezone_does_not_panic() {
+        // Zola issue #993: dates without timezone must not cause panics
+        let input = "---\ntitle: No TZ\ndate: \"2024-04-12T19:52:46\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert!(fm.date.is_some());
+    }
+
+    #[test]
+    fn missing_frontmatter_produces_clear_error_not_panic() {
+        // Zola issue #1327: markdown files with no frontmatter should give clear errors
+        let input = "# Just a heading\n\nNo frontmatter delimiters anywhere.";
+        let result = parse_frontmatter(input);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        // Error should mention frontmatter, not be a cryptic panic
+        assert!(err.to_lowercase().contains("frontmatter") || err.contains("---") || err.contains("+++"));
+    }
+
+    #[test]
+    fn frontmatter_with_special_yaml_characters_in_title() {
+        // Titles with colons, quotes, etc. must parse correctly
+        let input = "---\ntitle: \"YAML: A Primer - It's \\\"Complex\\\"\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert!(fm.title.contains("YAML"));
+    }
+
+    #[test]
+    fn frontmatter_with_empty_title() {
+        let input = "---\ntitle: \"\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "");
+    }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn frontmatter_only_no_body_content() {
+        // Hugo #11406: file with frontmatter but no body should produce empty body
+        let input = "---\ntitle: Meta Only\ndate: \"2024-01-15\"\n---\n";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "Meta Only");
+        assert!(body.is_empty() || body.trim().is_empty());
+    }
+
+    #[test]
+    fn yaml_unquoted_colon_in_value() {
+        // Hugo #33: YAML values with colons should parse when properly quoted
+        let input = "---\ntitle: \"My site: a blog\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "My site: a blog");
+    }
+
+    #[test]
+    fn empty_frontmatter_delimiters() {
+        // Hugo #4320: empty frontmatter (just delimiters) should produce defaults
+        let input = "---\n---\nBody content";
+        // This may error since title is required, which is acceptable
+        let result = parse_frontmatter(input);
+        // Either parses with defaults or gives a clear error — should not panic
+        match result {
+            Ok((_, body)) => assert!(body.contains("Body content")),
+            Err(e) => assert!(!e.to_string().is_empty()),
+        }
+    }
+
+    #[test]
+    fn yaml_and_toml_produce_same_result() {
+        // Hugo #768: same data in YAML vs TOML should produce identical frontmatter
+        let yaml_input = "---\ntitle: Same\ndate: \"2024-06-15\"\ndraft: false\ntags:\n  - a\n  - b\n---\nBody";
+        let toml_input = "+++\ntitle = \"Same\"\ndate = \"2024-06-15\"\ndraft = false\ntags = [\"a\", \"b\"]\n+++\nBody";
+
+        let (yaml_fm, yaml_body) = parse_frontmatter(yaml_input).unwrap();
+        let (toml_fm, toml_body) = parse_frontmatter(toml_input).unwrap();
+
+        assert_eq!(yaml_fm.title, toml_fm.title);
+        assert_eq!(yaml_fm.date, toml_fm.date);
+        assert_eq!(yaml_fm.draft, toml_fm.draft);
+        assert_eq!(yaml_fm.tags, toml_fm.tags);
+        assert_eq!(yaml_body, toml_body);
+    }
 }

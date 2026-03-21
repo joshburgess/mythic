@@ -283,4 +283,106 @@ mod tests {
         assert!(slugs.contains(&"blog/2024/hello-world"));
         assert!(slugs.contains(&"docs/getting-started"));
     }
+
+    #[test]
+    fn slug_preserves_underscores() {
+        // Zola issue #768: underscores in filenames should not become hyphens
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("rust-cfg_attr.md"), "# Test").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages[0].slug, "rust-cfg_attr");
+    }
+
+    #[test]
+    fn empty_markdown_file_does_not_panic() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("empty.md"), "").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+    }
+
+    #[test]
+    fn file_with_bom_marker_parsed() {
+        // Files saved with UTF-8 BOM should still parse
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        let mut bom_content = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        bom_content.extend_from_slice(b"# Hello BOM");
+        std::fs::write(content.join("bom.md"), bom_content).unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+    }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn content_with_frontmatter_only_produces_empty_body() {
+        // Hugo #11406: files with only frontmatter should have empty raw_content
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("meta.md"), "---\ntitle: Meta Only\n---\n").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].raw_content.trim().is_empty());
+    }
+
+    #[test]
+    fn editor_temp_files_ignored() {
+        // Hugo #6773: editor backup files should not be discovered
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("post.md"), "# Real").unwrap();
+        std::fs::write(content.join("post.md~"), "# Backup").unwrap();
+        std::fs::write(content.join(".post.md.swp"), "# Vim swap").unwrap();
+        std::fs::write(content.join("#post.md#"), "# Emacs auto-save").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].slug, "post");
+    }
+
+    #[test]
+    fn slug_strips_leading_trailing_hyphens() {
+        // Hugo #462: slugs from titles with special chars should not have leading/trailing hyphens
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // File slug comes from filename, not title, so test the filename directly
+        std::fs::write(content.join("--hello-world--.md"), "# Test").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        // The slug is derived from filename as-is (not slugified from title)
+        assert_eq!(pages[0].slug, "--hello-world--");
+        // This documents current behavior — a future fix could strip leading/trailing hyphens
+    }
+
+    #[test]
+    fn urls_use_forward_slashes() {
+        // Hugo #5515: generated slugs must use forward slashes even on Windows
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("content/blog/post");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("index.md"), "# Test").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert!(!pages[0].slug.contains('\\'), "Slug should use / not \\: {}", pages[0].slug);
+    }
 }

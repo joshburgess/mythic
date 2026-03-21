@@ -307,4 +307,28 @@ mod tests {
         let err = process_with_engine(input, &tera).unwrap_err();
         assert!(err.to_string().contains("missing_shortcode"));
     }
+
+    #[test]
+    fn shortcode_in_code_block_is_expanded() {
+        // Zola issue #1514: shortcodes inside fenced code blocks should ideally be
+        // literal text. Currently, the shortcode engine does not skip code blocks,
+        // so shortcodes are expanded even inside ```. This test documents the
+        // current (incorrect) behavior. When this is fixed, this test should be
+        // updated to assert the shortcode syntax is preserved literally.
+        let tera = setup_tera(&[("youtube.html", "<iframe></iframe>")]);
+        let input = "```\n{{% youtube id=\"abc\" %}}\n```";
+        let result = process_with_engine(input, &tera).unwrap();
+        // Currently expands the shortcode even inside code block (known bug)
+        assert!(result.contains("<iframe></iframe>"), "Got: {result}");
+    }
+
+    #[test]
+    fn shortcode_with_empty_body_renders() {
+        // Zola issue #2564: empty body shortcodes should still render
+        let tera = setup_tera(&[("wrapper.html", "<div class=\"wrap\">{{ inner | safe }}</div>")]);
+        let input = "{{% wrapper %}}{{% /wrapper %}}";
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(result.contains("class=\"wrap\""));
+        assert!(result.contains("<div class=\"wrap\"></div>"));
+    }
 }
