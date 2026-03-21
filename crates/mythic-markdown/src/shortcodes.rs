@@ -21,7 +21,10 @@ pub fn process_shortcodes(content: &str, shortcode_dir: &Path) -> Result<String>
 }
 
 fn process_with_engine(content: &str, tera: &Tera) -> Result<String> {
-    let mut result = content.to_string();
+    // Protect fenced code blocks from shortcode processing by replacing
+    // them with placeholders, processing shortcodes, then restoring.
+    let (protected, code_blocks) = extract_code_blocks(content);
+    let mut result = protected;
 
     // Process paired shortcodes first (they may contain self-closing ones)
     loop {
@@ -35,7 +38,50 @@ fn process_with_engine(content: &str, tera: &Tera) -> Result<String> {
     // Then self-closing shortcodes
     result = process_self_closing(&result, tera)?;
 
+    // Restore code blocks
+    result = restore_code_blocks(&result, &code_blocks);
+
     Ok(result)
+}
+
+/// Extract fenced code blocks and replace with placeholders.
+fn extract_code_blocks(content: &str) -> (String, Vec<String>) {
+    let mut protected = String::with_capacity(content.len());
+    let mut blocks = Vec::new();
+    let mut remaining = content;
+
+    while let Some(start) = remaining.find("```") {
+        protected.push_str(&remaining[..start]);
+
+        let after_open = &remaining[start + 3..];
+        // Find the closing ```
+        if let Some(close) = after_open.find("\n```") {
+            // Include everything from opening ``` to closing ``` plus the newline after
+            let block_end = start + 3 + close + 4; // ``` + content + \n```
+            let full_block = &remaining[start..block_end];
+            let placeholder = format!("\x00CODE_BLOCK_{}\x00", blocks.len());
+            blocks.push(full_block.to_string());
+            protected.push_str(&placeholder);
+            remaining = &remaining[block_end..];
+        } else {
+            // Unclosed code block — include the rest as-is
+            protected.push_str(&remaining[start..]);
+            remaining = "";
+        }
+    }
+
+    protected.push_str(remaining);
+    (protected, blocks)
+}
+
+/// Restore code blocks from placeholders.
+fn restore_code_blocks(content: &str, blocks: &[String]) -> String {
+    let mut result = content.to_string();
+    for (i, block) in blocks.iter().enumerate() {
+        let placeholder = format!("\x00CODE_BLOCK_{i}\x00");
+        result = result.replace(&placeholder, block);
+    }
+    result
 }
 
 fn process_paired(content: &str, tera: &Tera) -> Result<String> {
@@ -309,17 +355,15 @@ mod tests {
     }
 
     #[test]
-    fn shortcode_in_code_block_is_expanded() {
-        // Zola issue #1514: shortcodes inside fenced code blocks should ideally be
-        // literal text. Currently, the shortcode engine does not skip code blocks,
-        // so shortcodes are expanded even inside ```. This test documents the
-        // current (incorrect) behavior. When this is fixed, this test should be
-        // updated to assert the shortcode syntax is preserved literally.
+    fn shortcode_in_code_block_not_expanded() {
+        // Zola issue #1514: shortcodes inside fenced code blocks must be
+        // preserved as literal text, not expanded.
         let tera = setup_tera(&[("youtube.html", "<iframe></iframe>")]);
         let input = "```\n{{% youtube id=\"abc\" %}}\n```";
         let result = process_with_engine(input, &tera).unwrap();
-        // Currently expands the shortcode even inside code block (known bug)
-        assert!(result.contains("<iframe></iframe>"), "Got: {result}");
+        // Shortcode syntax should be preserved inside code block
+        assert!(result.contains("{{% youtube"), "Shortcode inside code block should not be expanded, got: {result}");
+        assert!(!result.contains("<iframe>"), "Shortcode template should NOT be rendered inside code block");
     }
 
     #[test]
