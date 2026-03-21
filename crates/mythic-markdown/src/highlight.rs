@@ -107,4 +107,68 @@ mod tests {
         assert!(!css.is_empty());
         assert!(css.contains("color:"));
     }
+
+    #[test]
+    fn highlight_python() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("def greet(name):\n    return f\"Hello, {name}\"", "python");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("<span"));
+        assert!(html.contains("greet"));
+    }
+
+    #[test]
+    fn highlight_javascript() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("const x = () => console.log('hi');", "javascript");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("<span"));
+        assert!(html.contains("console"));
+    }
+
+    #[test]
+    fn highlight_go() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("func main() {\n\tfmt.Println(\"hello\")\n}", "go");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("<span"));
+        assert!(html.contains("main"));
+    }
+
+    #[test]
+    fn highlight_bash() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("#!/bin/bash\necho \"hello world\"\nexit 0", "bash");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("<span"));
+        assert!(html.contains("echo"));
+    }
+
+    #[test]
+    fn unknown_language_falls_back() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("some random code here", "nonexistent_lang_xyz");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("some random code here"));
+    }
+
+    #[test]
+    fn empty_code_string() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        let html = h.highlight("", "rust");
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("</code></pre>"));
+    }
+
+    #[test]
+    fn special_html_characters_escaped() {
+        let h = Highlighter::new("base16-ocean.dark", false);
+        // Use plain text so syntect doesn't wrap in extra spans that might obscure the escaping
+        let html = h.highlight("<div> &amp; \"quoted\" </div>", "txt");
+        assert!(html.contains("<pre><code>"));
+        // The < and > from the code content should be escaped, not raw HTML
+        assert!(!html.contains("<div>"));
+        assert!(html.contains("&lt;div&gt;"));
+        assert!(html.contains("&amp;"));
+    }
 }

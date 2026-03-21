@@ -203,4 +203,165 @@ mod tests {
         assert_eq!(pages[0].toc[1].text, "Section B");
         assert!(pages[0].rendered_html.as_ref().unwrap().contains("id=\"section-a\""));
     }
+
+    fn make_page(raw_content: &str) -> Page {
+        Page {
+            source_path: std::path::PathBuf::from("test.md"),
+            slug: "test".to_string(),
+            frontmatter: mythic_core::page::Frontmatter {
+                title: "Test".to_string(),
+                ..Default::default()
+            },
+            raw_content: raw_content.to_string(),
+            rendered_html: None,
+            output_path: None,
+            content_hash: 0,
+            toc: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn footnotes_render_correctly() {
+        let md = "This has a footnote[^1].\n\n[^1]: The footnote content.";
+        let html = render_one(md);
+        assert!(html.contains("footnote"));
+        assert!(html.contains("The footnote content"));
+    }
+
+    #[test]
+    fn multiple_code_blocks_different_languages() {
+        let highlighter = Highlighter::new("base16-ocean.dark", false);
+        let md = "```rust\nfn main() {}\n```\n\nSome text\n\n```python\ndef hello():\n    pass\n```";
+        let html = render_one_highlighted(md, &highlighter);
+        // Both code blocks should contain highlighted spans
+        assert!(html.contains("main"));
+        assert!(html.contains("hello"));
+        // Should have two <pre><code> blocks
+        let pre_count = html.matches("<pre><code>").count();
+        assert_eq!(pre_count, 2);
+    }
+
+    #[test]
+    fn no_headings_produces_empty_toc() {
+        let mut pages = vec![make_page("Just a paragraph.\n\nAnother paragraph.")];
+        render_markdown(&mut pages);
+        assert!(pages[0].toc.is_empty());
+        assert!(pages[0].rendered_html.is_some());
+    }
+
+    #[test]
+    fn only_h1_headings_filtered_by_default_toc() {
+        // Default config has toc_min_level=2, so h1 headings should NOT appear in toc
+        let mut pages = vec![make_page("# Title One\n\n# Title Two\n\nSome text")];
+        render_markdown(&mut pages);
+        assert!(pages[0].toc.is_empty());
+        // But the headings should still be in the rendered HTML
+        let html = pages[0].rendered_html.as_ref().unwrap();
+        assert!(html.contains("Title One"));
+        assert!(html.contains("Title Two"));
+    }
+
+    #[test]
+    fn links_preserved_in_markdown() {
+        let md = "Check out [Rust](https://www.rust-lang.org) and [Mythic](/about).";
+        let html = render_one(md);
+        assert!(html.contains("href=\"https://www.rust-lang.org\""));
+        assert!(html.contains("href=\"/about\""));
+        assert!(html.contains(">Rust<"));
+        assert!(html.contains(">Mythic<"));
+    }
+
+    #[test]
+    fn images_preserved_in_markdown() {
+        let md = "![Alt text](image.png)\n\n![Logo](https://example.com/logo.svg \"Title\")";
+        let html = render_one(md);
+        assert!(html.contains("<img"));
+        assert!(html.contains("src=\"image.png\""));
+        assert!(html.contains("alt=\"Alt text\""));
+        assert!(html.contains("src=\"https://example.com/logo.svg\""));
+    }
+
+    #[test]
+    fn mixed_content_headings_code_lists_tables() {
+        let highlighter = Highlighter::new("base16-ocean.dark", false);
+        let md = "\
+## Introduction
+
+Here is a list:
+
+- alpha
+- beta
+
+## Code Example
+
+```rust
+fn add(a: i32, b: i32) -> i32 { a + b }
+```
+
+## Data Table
+
+| Name  | Value |
+|-------|-------|
+| x     | 42    |
+";
+        let html = render_one_highlighted(md, &highlighter);
+        // Headings
+        assert!(html.contains("Introduction"));
+        assert!(html.contains("Code Example"));
+        assert!(html.contains("Data Table"));
+        // List
+        assert!(html.contains("<li>alpha</li>"));
+        assert!(html.contains("<li>beta</li>"));
+        // Code
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("add"));
+        // Table
+        assert!(html.contains("<table>"));
+        assert!(html.contains("42"));
+    }
+
+    #[test]
+    fn render_markdown_with_config_custom_theme() {
+        let mut pages = vec![make_page("```rust\nlet x = 1;\n```")];
+        let config = RenderConfig {
+            highlight_theme: "InspiredGitHub".to_string(),
+            ..Default::default()
+        };
+        render_markdown_with_config(&mut pages, &config);
+        let html = pages[0].rendered_html.as_ref().unwrap();
+        assert!(html.contains("<pre><code>"));
+        assert!(html.contains("<span"));
+    }
+
+    #[test]
+    fn render_markdown_with_config_line_numbers() {
+        let mut pages = vec![make_page("```rust\nlet a = 1;\nlet b = 2;\n```")];
+        let config = RenderConfig {
+            line_numbers: true,
+            ..Default::default()
+        };
+        render_markdown_with_config(&mut pages, &config);
+        let html = pages[0].rendered_html.as_ref().unwrap();
+        assert!(html.contains("line-number"));
+    }
+
+    #[test]
+    fn parallel_rendering_determinism() {
+        let md = "## Hello\n\nParagraph\n\n```rust\nfn f() {}\n```\n\n## World";
+        let mut pages_a: Vec<Page> = (0..10).map(|_| make_page(md)).collect();
+        let mut pages_b: Vec<Page> = (0..10).map(|_| make_page(md)).collect();
+
+        render_markdown(&mut pages_a);
+        render_markdown(&mut pages_b);
+
+        for (a, b) in pages_a.iter().zip(pages_b.iter()) {
+            assert_eq!(a.rendered_html, b.rendered_html);
+            assert_eq!(a.toc.len(), b.toc.len());
+            for (ta, tb) in a.toc.iter().zip(b.toc.iter()) {
+                assert_eq!(ta.text, tb.text);
+                assert_eq!(ta.id, tb.id);
+                assert_eq!(ta.level, tb.level);
+            }
+        }
+    }
 }

@@ -166,4 +166,66 @@ mod tests {
         assert!(robots.contains("Allow: /"));
         assert!(robots.contains("Sitemap: https://example.com/sitemap.xml"));
     }
+
+    #[test]
+    fn sitemap_with_nested_slug_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages = vec![
+            test_page("blog/2024/my-post", "2024-06-01"),
+            test_page("docs/api/v2/reference", "2024-05-15"),
+        ];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        assert!(sitemap.contains("https://example.com/blog/2024/my-post/"));
+        assert!(sitemap.contains("https://example.com/docs/api/v2/reference/"));
+    }
+
+    #[test]
+    fn sitemap_disabled_via_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = SiteConfig::for_testing("Test", "https://example.com");
+        config.sitemap = Some(crate::config::SitemapConfig {
+            enabled: false,
+            changefreq: "weekly".to_string(),
+        });
+        let pages = vec![test_page("about", "2024-01-01")];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        // Neither sitemap.xml nor robots.txt should be generated
+        assert!(!dir.path().join("sitemap.xml").exists());
+        assert!(!dir.path().join("robots.txt").exists());
+    }
+
+    #[test]
+    fn large_number_of_pages_in_sitemap() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages: Vec<Page> = (0..500)
+            .map(|i| test_page(&format!("page-{i}"), "2024-01-01"))
+            .collect();
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        let url_count = sitemap.matches("<url>").count();
+        assert_eq!(url_count, 500);
+    }
+
+    #[test]
+    fn base_url_with_trailing_slash_handled() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com/");
+        let pages = vec![test_page("about", "2024-01-01")];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        // Should not produce double slashes like "https://example.com//about/"
+        assert!(!sitemap.contains("example.com//"));
+        assert!(sitemap.contains("https://example.com/about/"));
+    }
 }

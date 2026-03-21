@@ -219,4 +219,83 @@ mod tests {
         assert!(html.contains("href=\"#a-1\""));
         assert!(html.contains("href=\"#b\""));
     }
+
+    #[test]
+    fn headings_with_inline_code_clean_text() {
+        let html = "<h2>Using <code>println!</code> in Rust</h2>";
+        let (entries, _) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].text, "Using println! in Rust");
+    }
+
+    #[test]
+    fn headings_with_links_stripped() {
+        let html = "<h2>See <a href=\"https://example.com\">Example Site</a> for details</h2>";
+        let (entries, _) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].text, "See Example Site for details");
+    }
+
+    #[test]
+    fn empty_document_produces_empty_toc() {
+        let html = "";
+        let (entries, modified) = extract_toc(html, 1, 6);
+        assert!(entries.is_empty());
+        assert!(modified.is_empty());
+    }
+
+    #[test]
+    fn single_heading() {
+        let html = "<h2>Only Section</h2>";
+        let (entries, modified) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].text, "Only Section");
+        assert_eq!(entries[0].level, 2);
+        assert_eq!(entries[0].id, "only-section");
+        assert!(modified.contains("id=\"only-section\""));
+    }
+
+    #[test]
+    fn headings_with_special_characters() {
+        let html = "<h2>What's New in v2.0?</h2>\n<h2>C++ &amp; Rust</h2>";
+        let (entries, _) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].text, "What's New in v2.0?");
+        assert_eq!(entries[0].id, "what-s-new-in-v2-0");
+        assert_eq!(entries[1].text, "C++ &amp; Rust");
+    }
+
+    #[test]
+    fn render_toc_html_single_entry() {
+        let entries = vec![TocEntry {
+            level: 2,
+            text: "Introduction".to_string(),
+            id: "introduction".to_string(),
+        }];
+        let html = render_toc_html(&entries);
+        assert!(html.contains("<nav class=\"toc\">"));
+        assert!(html.contains("href=\"#introduction\""));
+        assert!(html.contains("Introduction"));
+        assert!(html.contains("</nav>"));
+    }
+
+    #[test]
+    fn render_toc_html_empty_entries() {
+        let entries: Vec<TocEntry> = vec![];
+        let html = render_toc_html(&entries);
+        assert!(html.is_empty());
+    }
+
+    #[test]
+    fn heading_ids_handle_unicode() {
+        let html = "<h2>Über Café résumé</h2>";
+        let (entries, modified) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 1);
+        // slugify_heading keeps alphanumeric (including unicode) and hyphens
+        let id = &entries[0].id;
+        assert!(!id.is_empty());
+        assert!(modified.contains(&format!("id=\"{id}\"")));
+        // Verify the text is preserved
+        assert_eq!(entries[0].text, "Über Café résumé");
+    }
 }

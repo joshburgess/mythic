@@ -277,4 +277,87 @@ mod tests {
         let entry_count = feed.matches("<entry>").count();
         assert_eq!(entry_count, 2);
     }
+
+    #[test]
+    fn feed_entries_sorted_by_date_descending() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![
+            page("Old Post", "old", "2023-01-01", vec![]),
+            page("New Post", "new", "2024-06-15", vec![]),
+            page("Mid Post", "mid", "2024-03-10", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        let new_pos = feed.find("New Post").unwrap();
+        let mid_pos = feed.find("Mid Post").unwrap();
+        let old_pos = feed.find("Old Post").unwrap();
+        assert!(new_pos < mid_pos, "newest should appear first");
+        assert!(mid_pos < old_pos, "middle date should appear second");
+    }
+
+    #[test]
+    fn feed_with_no_dated_pages_produces_empty_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        // Pages without dates
+        let pages = vec![Page {
+            source_path: PathBuf::from("nodates.md"),
+            slug: "nodates".to_string(),
+            frontmatter: Frontmatter {
+                title: "No Date".to_string(),
+                date: None,
+                ..Default::default()
+            },
+            raw_content: "content".to_string(),
+            rendered_html: None,
+            output_path: None,
+            content_hash: 0,
+            toc: Vec::new(),
+        }];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert_eq!(feed.matches("<entry>").count(), 0);
+    }
+
+    #[test]
+    fn xml_special_characters_in_titles_are_escaped() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![
+            page("Tom & Jerry <3 \"Quotes\"", "special", "2024-01-01", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert!(feed.contains("Tom &amp; Jerry &lt;3 &quot;Quotes&quot;"));
+        // Should not contain unescaped ampersand in title context
+        assert!(!feed.contains("<title>Tom & Jerry"));
+    }
+
+    #[test]
+    fn feed_respects_base_url_in_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = feed_config();
+        config.base_url = "https://mysite.org".to_string();
+        let pages = vec![
+            page("Post", "blog/hello", "2024-05-01", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert!(feed.contains("https://mysite.org/blog/hello/"));
+        assert!(feed.contains("https://mysite.org/feed.xml"));
+        assert!(!feed.contains("http://example.com"));
+    }
 }
