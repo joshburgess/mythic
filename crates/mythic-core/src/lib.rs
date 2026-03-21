@@ -10,6 +10,7 @@ pub mod config;
 pub mod content;
 pub mod data;
 pub mod feed;
+pub mod migrate;
 pub mod page;
 pub mod plugin;
 pub mod rhai_plugin;

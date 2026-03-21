@@ -45,6 +45,18 @@ enum Commands {
         /// Project name
         name: String,
     },
+    /// Migrate from another static site generator
+    Migrate {
+        /// Source SSG: jekyll, hugo, or eleventy
+        #[arg(long)]
+        from: String,
+        /// Path to the source project
+        #[arg(long)]
+        source: PathBuf,
+        /// Output path for the migrated Mythic project
+        #[arg(long)]
+        output: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -69,6 +81,19 @@ fn main() -> Result<()> {
         }
         Commands::Init { name } => {
             init_project(&name)?;
+        }
+        Commands::Migrate {
+            from,
+            source,
+            output,
+        } => {
+            let report = match from.as_str() {
+                "jekyll" => mythic_core::migrate::jekyll::migrate(&source, &output)?,
+                "hugo" => mythic_core::migrate::hugo::migrate(&source, &output)?,
+                "eleventy" | "11ty" => mythic_core::migrate::eleventy::migrate(&source, &output)?,
+                other => anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy"),
+            };
+            report.print_summary();
         }
     }
 
