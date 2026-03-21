@@ -11,4 +11,6 @@ pub mod content;
 pub mod data;
 pub mod feed;
 pub mod page;
+pub mod plugin;
+pub mod rhai_plugin;
 pub mod taxonomy;
