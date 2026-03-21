@@ -236,4 +236,124 @@ mod tests {
         assert_eq!(a["theme"]["size"], 12);
         assert_eq!(a["theme"]["font"], "sans");
     }
+
+    #[test]
+    fn cascade_with_toml_dir_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(
+            content.join("_dir.toml"),
+            "layout = \"toml-layout\"\nauthor = \"TOML Author\"",
+        )
+        .unwrap();
+
+        let mut pages = vec![make_page(&content.join("post.md"), "post")];
+        apply_cascade(&mut pages, &content).unwrap();
+
+        assert_eq!(pages[0].frontmatter.layout.as_deref(), Some("toml-layout"));
+        assert_eq!(
+            pages[0].frontmatter.extra.as_ref().unwrap()["author"],
+            Value::String("TOML Author".to_string())
+        );
+    }
+
+    #[test]
+    fn cascade_with_json_dir_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(
+            content.join("_dir.json"),
+            r#"{"layout": "json-layout", "section": "main"}"#,
+        )
+        .unwrap();
+
+        let mut pages = vec![make_page(&content.join("page.md"), "page")];
+        apply_cascade(&mut pages, &content).unwrap();
+
+        assert_eq!(pages[0].frontmatter.layout.as_deref(), Some("json-layout"));
+        assert_eq!(
+            pages[0].frontmatter.extra.as_ref().unwrap()["section"],
+            Value::String("main".to_string())
+        );
+    }
+
+    #[test]
+    fn three_levels_of_cascade_nesting() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        let blog = content.join("blog");
+        let year = blog.join("2024");
+        std::fs::create_dir_all(&year).unwrap();
+
+        std::fs::write(content.join("_dir.yaml"), "layout: base\nsite_name: MySite").unwrap();
+        std::fs::write(blog.join("_dir.yaml"), "layout: blog\ncategory: articles").unwrap();
+        std::fs::write(year.join("_dir.yaml"), "year: \"2024\"").unwrap();
+
+        let mut pages = vec![make_page(&year.join("post.md"), "blog/2024/post")];
+        apply_cascade(&mut pages, &content).unwrap();
+
+        // layout should be "blog" (overrides "base")
+        assert_eq!(pages[0].frontmatter.layout.as_deref(), Some("blog"));
+        let extra = pages[0].frontmatter.extra.as_ref().unwrap();
+        // site_name from root level
+        assert_eq!(extra["site_name"], Value::String("MySite".to_string()));
+        // category from blog level
+        assert_eq!(extra["category"], Value::String("articles".to_string()));
+        // year from deepest level
+        assert_eq!(extra["year"], Value::String("2024".to_string()));
+    }
+
+    #[test]
+    fn cascade_does_not_affect_sibling_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        let blog = content.join("blog");
+        let docs = content.join("docs");
+        std::fs::create_dir_all(&blog).unwrap();
+        std::fs::create_dir_all(&docs).unwrap();
+
+        std::fs::write(blog.join("_dir.yaml"), "layout: blog-layout\nblog_only: true").unwrap();
+
+        let mut pages = vec![
+            make_page(&blog.join("post.md"), "blog/post"),
+            make_page(&docs.join("guide.md"), "docs/guide"),
+        ];
+        apply_cascade(&mut pages, &content).unwrap();
+
+        // Blog page should get the cascade
+        assert_eq!(pages[0].frontmatter.layout.as_deref(), Some("blog-layout"));
+        assert_eq!(
+            pages[0].frontmatter.extra.as_ref().unwrap()["blog_only"],
+            Value::Bool(true)
+        );
+
+        // Docs page should NOT get blog's cascade
+        assert!(
+            pages[1].frontmatter.extra.is_none()
+                || !pages[1]
+                    .frontmatter
+                    .extra
+                    .as_ref()
+                    .unwrap()
+                    .contains_key("blog_only")
+        );
+    }
+
+    #[test]
+    fn empty_dir_yaml_is_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // Empty YAML is valid (parses as Null), should not crash
+        std::fs::write(content.join("_dir.yaml"), "").unwrap();
+
+        let mut pages = vec![make_page(&content.join("page.md"), "page")];
+        let result = apply_cascade(&mut pages, &content);
+        // Should succeed without error
+        assert!(result.is_ok());
+        // Frontmatter should be unaffected (layout stays as constructed)
+        assert_eq!(pages[0].frontmatter.title, "Test");
+    }
 }

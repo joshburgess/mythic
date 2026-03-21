@@ -143,4 +143,144 @@ mod tests {
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].slug, "blog/2024/post");
     }
+
+    #[test]
+    fn non_markdown_files_are_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("page.txt"), "text file").unwrap();
+        std::fs::write(content.join("page.html"), "<p>html</p>").unwrap();
+        std::fs::write(content.join("main.rs"), "fn main() {}").unwrap();
+        std::fs::write(content.join("real.md"), "# Real").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].slug, "real");
+    }
+
+    #[test]
+    fn markdown_extension_discovered() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("page.markdown"), "# Markdown ext").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].slug, "page");
+    }
+
+    #[test]
+    fn toml_frontmatter_parsed() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(
+            content.join("post.md"),
+            "+++\ntitle = \"TOML Post\"\ndraft = true\n+++\nBody here",
+        )
+        .unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "TOML Post");
+        assert_eq!(pages[0].frontmatter.draft, Some(true));
+        assert_eq!(pages[0].raw_content, "Body here");
+    }
+
+    #[test]
+    fn unicode_filenames_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("über-uns.md"), "# Über Uns").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].slug.contains("über-uns"));
+    }
+
+    #[test]
+    fn deeply_nested_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep = dir.path().join("content/a/b/c/d/e");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("leaf.md"), "# Leaf").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].slug, "a/b/c/d/e/leaf");
+    }
+
+    #[test]
+    fn large_number_of_files_in_flat_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+
+        for i in 0..100 {
+            std::fs::write(content.join(format!("page-{i}.md")), format!("# Page {i}")).unwrap();
+        }
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 100);
+    }
+
+    #[test]
+    fn content_hash_is_deterministic() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("page.md"), "# Deterministic").unwrap();
+
+        let config = fixture_config();
+        let pages1 = discover_content(&config, dir.path()).unwrap();
+        let pages2 = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages1[0].content_hash, pages2[0].content_hash);
+    }
+
+    #[test]
+    fn content_hash_changes_when_content_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("page.md"), "# Version 1").unwrap();
+
+        let config = fixture_config();
+        let pages1 = discover_content(&config, dir.path()).unwrap();
+        let hash1 = pages1[0].content_hash;
+
+        std::fs::write(content.join("page.md"), "# Version 2").unwrap();
+        let pages2 = discover_content(&config, dir.path()).unwrap();
+        let hash2 = pages2[0].content_hash;
+
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn slug_derivation_from_various_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(content.join("blog/2024")).unwrap();
+        std::fs::create_dir_all(content.join("docs")).unwrap();
+
+        std::fs::write(content.join("index.md"), "# Home").unwrap();
+        std::fs::write(content.join("blog/2024/hello-world.md"), "# HW").unwrap();
+        std::fs::write(content.join("docs/getting-started.md"), "# GS").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        let slugs: Vec<&str> = pages.iter().map(|p| p.slug.as_str()).collect();
+
+        assert!(slugs.contains(&"index"));
+        assert!(slugs.contains(&"blog/2024/hello-world"));
+        assert!(slugs.contains(&"docs/getting-started"));
+    }
 }

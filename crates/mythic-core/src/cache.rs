@@ -100,4 +100,61 @@ mod tests {
         assert!(!reloaded.is_changed("page-b", 222));
         assert!(reloaded.is_changed("page-a", 999));
     }
+
+    #[test]
+    fn corrupted_cache_file_handled_gracefully() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache_path = dir.path().join(CACHE_FILENAME);
+
+        // Write invalid JSON
+        std::fs::write(&cache_path, "this is not valid json {{{").unwrap();
+
+        // Should not panic, should return empty graph
+        let graph = DepGraph::load(dir.path());
+        assert!(graph.is_changed("anything", 0));
+        assert!(graph.hashes.is_empty());
+    }
+
+    #[test]
+    fn cache_with_many_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut graph = DepGraph::load(dir.path());
+
+        for i in 0..1000 {
+            graph.record(&format!("page-{i}"), i as u64);
+        }
+        graph.save().unwrap();
+
+        let reloaded = DepGraph::load(dir.path());
+        for i in 0..1000 {
+            assert!(
+                !reloaded.is_changed(&format!("page-{i}"), i as u64),
+                "page-{i} should be unchanged"
+            );
+        }
+        // Verify a changed one is detected
+        assert!(reloaded.is_changed("page-500", 99999));
+    }
+
+    #[test]
+    fn cache_is_a_plain_hashmap() {
+        // Verify that the cache is just a HashMap and behaves as expected
+        // with overwrites
+        let dir = tempfile::tempdir().unwrap();
+        let mut graph = DepGraph::load(dir.path());
+
+        graph.record("page", 100);
+        assert!(!graph.is_changed("page", 100));
+
+        // Overwrite with new hash
+        graph.record("page", 200);
+        assert!(graph.is_changed("page", 100));
+        assert!(!graph.is_changed("page", 200));
+
+        // Save and reload to verify persistence of overwrite
+        graph.save().unwrap();
+        let reloaded = DepGraph::load(dir.path());
+        assert!(reloaded.is_changed("page", 100));
+        assert!(!reloaded.is_changed("page", 200));
+    }
 }

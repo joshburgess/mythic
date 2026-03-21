@@ -288,4 +288,61 @@ mod tests {
         process_i18n(&mut pages, &config);
         assert_eq!(pages[0].frontmatter.locale.as_deref(), Some("es"));
     }
+
+    #[test]
+    fn missing_translation_returns_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let i18n_dir = dir.path().join("i18n");
+        std::fs::create_dir_all(&i18n_dir).unwrap();
+        std::fs::write(i18n_dir.join("en.yaml"), "greeting: Hello").unwrap();
+
+        let config = test_i18n_config();
+        let translations = Translations::load(dir.path(), &config).unwrap();
+
+        // Missing key
+        assert_eq!(translations.translate("en", "nonexistent"), None);
+        // Missing locale
+        assert_eq!(translations.translate("de", "greeting"), None);
+        // Missing nested key
+        assert_eq!(translations.translate("en", "deeply.nested.missing"), None);
+    }
+
+    #[test]
+    fn default_locale_pages_keep_original_slug() {
+        let config = test_i18n_config();
+        let mut pages = vec![
+            page_with_locale("about", Some("en")),
+        ];
+
+        process_i18n(&mut pages, &config);
+
+        // Default locale (en) should keep its slug as-is
+        assert_eq!(pages[0].slug, "about");
+    }
+
+    #[test]
+    fn pages_without_locale_get_default() {
+        let config = test_i18n_config();
+        let mut pages = vec![
+            page_with_locale("contact", None),
+        ];
+
+        process_i18n(&mut pages, &config);
+
+        // Should be assigned the default locale "en"
+        assert_eq!(pages[0].frontmatter.locale.as_deref(), Some("en"));
+    }
+
+    #[test]
+    fn empty_translations_object() {
+        let dir = tempfile::tempdir().unwrap();
+        // No i18n directory at all
+        let config = test_i18n_config();
+        let translations = Translations::load(dir.path(), &config).unwrap();
+
+        // Should succeed but return None for everything
+        assert_eq!(translations.translate("en", "anything"), None);
+        assert_eq!(translations.translate("es", "anything"), None);
+        assert!(translations.locales.is_empty());
+    }
 }

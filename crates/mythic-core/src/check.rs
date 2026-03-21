@@ -312,4 +312,99 @@ mod tests {
         let report = check_site(dir.path()).unwrap();
         assert!(report.warnings.is_empty());
     }
+
+    #[test]
+    fn anchor_links_not_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<a href=\"#section\">Jump</a><a href=\"#top\">Top</a>"),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn mailto_links_not_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", r#"<a href="mailto:user@example.com">Email</a>"#),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn multiple_broken_links_in_same_file() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", r#"<a href="/gone1/">A</a><a href="/gone2/">B</a><a href="/gone3/">C</a>"#),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert_eq!(report.errors.len(), 3);
+        assert!(report.errors.iter().all(|e| e.file == "index.html"));
+    }
+
+    #[test]
+    fn nested_output_directory_structure() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("blog/post/index.html", r#"<a href="/about/">Link</a>"#),
+            ("about/index.html", "<p>About</p>"),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+        assert_eq!(report.pages_checked, 2);
+    }
+
+    #[test]
+    fn file_with_no_links_produces_no_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<p>Just text, no links at all.</p>"),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+        assert!(report.warnings.is_empty());
+        assert_eq!(report.links_checked, 0);
+    }
+
+    #[test]
+    fn image_with_alt_attribute_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", r#"<img src="photo.jpg" alt="A photo"><img src="logo.png" alt="Logo">"#),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        assert!(report.warnings.is_empty());
+    }
+
+    #[test]
+    fn multiple_heading_skips_in_same_file() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<h1>Title</h1><h3>Skip1</h3><h6>Skip2</h6>"),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        // h1->h3 is a skip, h3->h6 is a skip
+        assert!(report.warnings.len() >= 2);
+    }
+
+    #[test]
+    fn valid_heading_going_back_up() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<h1>A</h1><h2>B</h2><h3>C</h3><h2>Back up</h2>"),
+        ]);
+
+        let report = check_site(dir.path()).unwrap();
+        // Going from h3 back to h2 is fine, no warnings
+        assert!(report.warnings.is_empty());
+    }
 }

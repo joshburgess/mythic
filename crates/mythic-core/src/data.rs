@@ -187,4 +187,89 @@ mod tests {
         let data = load_data(Path::new("/nonexistent/_data")).unwrap();
         assert_eq!(data, Value::Object(serde_json::Map::new()));
     }
+
+    #[test]
+    fn mixed_file_types_in_same_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.yaml"), "key: from_yaml").unwrap();
+        std::fs::write(dir.path().join("settings.json"), r#"{"key": "from_json"}"#).unwrap();
+        std::fs::write(dir.path().join("meta.toml"), "key = \"from_toml\"").unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert_eq!(data["config"]["key"], "from_yaml");
+        assert_eq!(data["settings"]["key"], "from_json");
+        assert_eq!(data["meta"]["key"], "from_toml");
+    }
+
+    #[test]
+    fn deeply_nested_data_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep = dir.path().join("a/b/c");
+        std::fs::create_dir_all(&deep).unwrap();
+        std::fs::write(deep.join("leaf.yaml"), "value: deep").unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert_eq!(data["a"]["b"]["c"]["leaf"]["value"], "deep");
+    }
+
+    #[test]
+    fn empty_data_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // An empty YAML file parses as Null
+        std::fs::write(dir.path().join("empty.yaml"), "").unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert!(data["empty"].is_null());
+    }
+
+    #[test]
+    fn data_file_with_root_array() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("items.json"),
+            r#"[1, 2, 3, "four"]"#,
+        )
+        .unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert!(data["items"].is_array());
+        assert_eq!(data["items"][0], 1);
+        assert_eq!(data["items"][3], "four");
+    }
+
+    #[test]
+    fn data_file_with_complex_nested_structures() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("complex.json"),
+            r#"{
+                "users": [
+                    {"name": "Alice", "roles": ["admin", "editor"]},
+                    {"name": "Bob", "roles": ["viewer"]}
+                ],
+                "settings": {
+                    "nested": {"deep": {"value": 42}}
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert_eq!(data["complex"]["users"][0]["name"], "Alice");
+        assert_eq!(data["complex"]["users"][0]["roles"][1], "editor");
+        assert_eq!(data["complex"]["settings"]["nested"]["deep"]["value"], 42);
+    }
+
+    #[test]
+    fn underscore_prefixed_files_are_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("_dir.yaml"), "layout: blog").unwrap();
+        std::fs::write(dir.path().join("_hidden.json"), r#"{"secret": true}"#).unwrap();
+        std::fs::write(dir.path().join("visible.yaml"), "ok: true").unwrap();
+
+        let data = load_data(dir.path()).unwrap();
+        assert!(data.get("_dir").is_none());
+        assert!(data.get("_hidden").is_none());
+        assert_eq!(data["visible"]["ok"], true);
+    }
 }
