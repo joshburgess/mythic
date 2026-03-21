@@ -72,7 +72,7 @@ pub struct TranslationLink {
 
 /// Process pages for i18n: detect locales, adjust slugs, find translations.
 pub fn process_i18n(
-    pages: &mut Vec<Page>,
+    pages: &mut [Page],
     config: &I18nConfig,
 ) {
     // Detect locale from directory structure or frontmatter

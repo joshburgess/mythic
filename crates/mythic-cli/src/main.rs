@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "mythic", about = "A fast static site generator written in Rust")]
@@ -81,7 +81,19 @@ fn main() -> Result<()> {
             clean,
             profile,
         } => {
-            cmd_build(&config, drafts, clean, profile)?;
+            let site_config = mythic_core::config::load_config(&config)?;
+            let root = config
+                .parent()
+                .unwrap_or_else(|| Path::new("."));
+
+            if clean {
+                let output = root.join(&site_config.output_dir);
+                if output.exists() {
+                    std::fs::remove_dir_all(&output)?;
+                }
+            }
+
+            full_build(&site_config, root, drafts, profile)?;
         }
         Commands::Serve {
             config,
@@ -99,7 +111,7 @@ fn main() -> Result<()> {
             let site_config = mythic_core::config::load_config(&config)?;
             let root = config
                 .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
+                .unwrap_or_else(|| Path::new("."));
             let output_dir = root.join(&site_config.output_dir);
 
             let report = mythic_core::check::check_site(&output_dir)?;
@@ -127,32 +139,204 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn cmd_build(config_path: &PathBuf, drafts: bool, clean: bool, profile: bool) -> Result<()> {
-    let site_config = mythic_core::config::load_config(config_path)?;
-    let root = config_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."));
+/// Run the full build pipeline with all features integrated.
+fn full_build(
+    site_config: &mythic_core::config::SiteConfig,
+    root: &Path,
+    drafts: bool,
+    profile: bool,
+) -> Result<()> {
+    let output_dir = root.join(&site_config.output_dir);
 
-    if clean {
-        let output = root.join(&site_config.output_dir);
-        if output.exists() {
-            std::fs::remove_dir_all(&output)?;
+    // --- Pre-build: load data, plugins ---
+
+    // Load data files
+    let data_dir = root.join(&site_config.data_dir);
+    let site_data = mythic_core::data::load_data(&data_dir)?;
+
+    // Load plugins (Rust built-in + Rhai scripts)
+    let mut plugin_manager = mythic_core::plugin::PluginManager::new();
+    plugin_manager.register(Box::new(mythic_core::plugin::ReadingTimePlugin::new()));
+
+    let plugins_dir = root.join("plugins");
+    if plugins_dir.exists() {
+        let rhai_plugins = mythic_core::rhai_plugin::load_rhai_plugins(&plugins_dir)?;
+        for plugin in rhai_plugins {
+            plugin_manager.register(plugin);
         }
     }
 
-    let template_dir = root.join(&site_config.template_dir);
-    let engine = mythic_template::TemplateEngine::new(&template_dir)?;
+    // Run pre-build hooks
+    plugin_manager.run_pre_build(site_config)?;
 
-    mythic_core::build::build_with_profile(
-        &site_config,
+    // Load template engine
+    let template_dir = root.join(&site_config.template_dir);
+    let default_engine = site_config
+        .templates
+        .as_ref()
+        .map(|t| t.default_engine.as_str())
+        .unwrap_or("tera");
+    let engine = mythic_template::TemplateEngine::new_with_default(&template_dir, default_engine)?;
+
+    // Prepare render config
+    let render_config = mythic_markdown::render::RenderConfig {
+        highlight_theme: site_config
+            .highlight
+            .as_ref()
+            .map(|h| h.theme.clone())
+            .unwrap_or_else(|| "base16-ocean.dark".to_string()),
+        line_numbers: site_config
+            .highlight
+            .as_ref()
+            .map(|h| h.line_numbers)
+            .unwrap_or(false),
+        toc_min_level: site_config
+            .toc
+            .as_ref()
+            .map(|t| t.min_level)
+            .unwrap_or(2),
+        toc_max_level: site_config
+            .toc
+            .as_ref()
+            .map(|t| t.max_level)
+            .unwrap_or(4),
+    };
+
+    // Prepare shortcode dir
+    let shortcode_dir = root.join("shortcodes");
+
+    // Build combined context for templates (assets + data)
+    let assets_manifest = mythic_assets::process_assets(site_config, root)?;
+    let mut template_extra = serde_json::Map::new();
+    template_extra.insert(
+        "css_path".to_string(),
+        serde_json::to_value(&assets_manifest.css_path)?,
+    );
+    template_extra.insert(
+        "js_path".to_string(),
+        serde_json::to_value(&assets_manifest.js_path)?,
+    );
+    let assets_value = serde_json::Value::Object(template_extra);
+
+    // Generate syntax highlight CSS
+    let highlighter = mythic_markdown::highlight::Highlighter::new(
+        &render_config.highlight_theme,
+        render_config.line_numbers,
+    );
+    let highlight_css = highlighter.generate_css();
+    if !highlight_css.is_empty() {
+        let css_dir = output_dir.clone();
+        std::fs::create_dir_all(&css_dir)?;
+        std::fs::write(css_dir.join("syntax.css"), &highlight_css)?;
+    }
+
+    // --- Core build with integrated pipeline ---
+
+    let report = mythic_core::build::build_with_profile(
+        site_config,
         root,
         drafts,
-        |pages| mythic_markdown::render::render_markdown(pages),
+        |pages| {
+            // Apply data cascade
+            let content_dir = root.join(&site_config.content_dir);
+            if let Err(e) = mythic_core::cascade::apply_cascade(pages, &content_dir) {
+                eprintln!("  Cascade error: {e}");
+            }
+
+            // Run on_page_discovered hooks
+            if let Err(e) = plugin_manager.run_all_discovered(pages) {
+                eprintln!("  Plugin error: {e}");
+            }
+
+            // Process shortcodes before markdown rendering
+            for page in pages.iter_mut() {
+                if let Err(e) = plugin_manager.run_pre_render(page) {
+                    eprintln!("  Plugin pre_render error: {e}");
+                }
+
+                if shortcode_dir.exists() {
+                    match mythic_markdown::shortcodes::process_shortcodes(
+                        &page.raw_content,
+                        &shortcode_dir,
+                    ) {
+                        Ok(processed) => page.raw_content = processed,
+                        Err(e) => eprintln!("  Shortcode error in {}: {e}", page.slug),
+                    }
+                }
+            }
+
+            // Process i18n
+            if let Some(ref i18n_config) = site_config.i18n {
+                mythic_core::i18n::process_i18n(pages, i18n_config);
+            }
+
+            // Render markdown with syntax highlighting and TOC
+            mythic_markdown::render::render_markdown_with_config(pages, &render_config);
+
+            // Run post_render hooks
+            for page in pages.iter_mut() {
+                if let Err(e) = plugin_manager.run_post_render(page) {
+                    eprintln!("  Plugin post_render error: {e}");
+                }
+            }
+        },
         Some(|page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-            engine.render(page, cfg)
+            engine.render_full(page, cfg, Some(&assets_value), Some(&site_data))
         }),
         profile,
     )?;
+
+    // --- Post-build: taxonomies, feeds, sitemap ---
+
+    // Re-discover content for taxonomy/feed generation (need the rendered pages)
+    // We re-read because the build function consumed them. For taxonomies we
+    // only need the frontmatter data, not the rendered HTML.
+    let all_pages = mythic_core::content::discover_content(site_config, root)?;
+    let non_draft_pages: Vec<_> = all_pages
+        .into_iter()
+        .filter(|p| !p.frontmatter.draft.unwrap_or(false) || drafts)
+        .collect();
+
+    // Generate taxonomy pages
+    if !site_config.taxonomies.is_empty() {
+        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
+        let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
+
+        // Render and write taxonomy pages
+        for mut page in taxonomy_pages {
+            page.rendered_html = Some(String::new()); // Empty content for listing pages
+            match engine.render(&page, site_config) {
+                Ok(html) => {
+                    let dest = output_dir.join(&page.slug).join("index.html");
+                    if let Some(parent) = dest.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&dest, html)?;
+                }
+                Err(_) => {
+                    // Template may not exist (taxonomy_list.html / taxonomy_term.html)
+                    // This is expected if the user hasn't created taxonomy templates
+                }
+            }
+        }
+
+        // Generate feeds for taxonomies
+        mythic_core::feed::generate_feeds(
+            site_config,
+            &non_draft_pages,
+            &taxonomies,
+            &output_dir,
+        )?;
+    } else if site_config.feed.is_some() {
+        // Site-wide feed only (no taxonomies)
+        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
+    }
+
+    // Generate sitemap and robots.txt
+    mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
+
+    // Run post-build hooks
+    plugin_manager.run_post_build(&report)?;
 
     Ok(())
 }
@@ -161,23 +345,12 @@ async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
-        .unwrap_or_else(|| std::path::Path::new("."))
+        .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
 
-    // Initial build
+    // Initial build with full pipeline
     println!("Building site...");
-    let template_dir = root.join(&site_config.template_dir);
-    let engine = mythic_template::TemplateEngine::new(&template_dir)?;
-
-    mythic_core::build::build(
-        &site_config,
-        &root,
-        drafts,
-        |pages| mythic_markdown::render::render_markdown(pages),
-        Some(|page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-            engine.render(page, cfg)
-        }),
-    )?;
+    full_build(&site_config, &root, drafts, false)?;
 
     // Set up reload channel
     let (reload_tx, _) = mythic_server::server::reload_channel();
@@ -193,27 +366,7 @@ async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -
         while let Ok(event) = watcher.rx.recv() {
             println!("  Change detected: {event:?}");
 
-            let template_dir = rebuild_root.join(&rebuild_config.template_dir);
-            let engine = match mythic_template::TemplateEngine::new(&template_dir) {
-                Ok(e) => e,
-                Err(e) => {
-                    eprintln!("  Template error: {e}");
-                    continue;
-                }
-            };
-
-            match mythic_core::build::build(
-                &rebuild_config,
-                &rebuild_root,
-                drafts,
-                |pages| mythic_markdown::render::render_markdown(pages),
-                Some(
-                    |page: &mythic_core::page::Page,
-                     cfg: &mythic_core::config::SiteConfig| {
-                        engine.render(page, cfg)
-                    },
-                ),
-            ) {
+            match full_build(&rebuild_config, &rebuild_root, drafts, false) {
                 Ok(_) => {
                     use mythic_server::server::{notify_reload, ReloadMessage};
                     use mythic_server::watcher::WatchEvent;
@@ -222,11 +375,7 @@ async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -
                         WatchEvent::CssChanged(p) => ReloadMessage::CssReload {
                             path: p.to_string_lossy().to_string(),
                         },
-                        WatchEvent::ContentChanged(_) => {
-                            // TODO: for content-only changes, could send HtmlUpdate
-                            // with the new <main> content. For now, full reload.
-                            ReloadMessage::Reload
-                        }
+                        WatchEvent::ContentChanged(_) => ReloadMessage::Reload,
                         _ => ReloadMessage::Reload,
                     };
                     notify_reload(&rebuild_tx, msg);
@@ -252,7 +401,6 @@ async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -
 fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
 
-    // Check for bundled starter templates
     let starters_dir = find_starters_dir();
     let starter_path = starters_dir.as_ref().and_then(|d| {
         let p = d.join(template);
@@ -262,7 +410,6 @@ fn init_project(name: &str, template: &str) -> Result<()> {
     if let Some(starter) = starter_path {
         copy_dir_recursive(&starter, &root)?;
     } else {
-        // Fallback: generate a minimal blank site
         std::fs::create_dir_all(root.join("content"))?;
         std::fs::create_dir_all(root.join("templates"))?;
 
@@ -282,7 +429,6 @@ fn init_project(name: &str, template: &str) -> Result<()> {
         )?;
     }
 
-    // Always add .gitignore
     let gitignore = root.join(".gitignore");
     if !gitignore.exists() {
         std::fs::write(&gitignore, "/public\n.mythic-cache.json\n")?;
@@ -295,20 +441,14 @@ fn init_project(name: &str, template: &str) -> Result<()> {
 }
 
 fn find_starters_dir() -> Option<PathBuf> {
-    // Check relative to the binary, then common install paths
     if let Ok(exe) = std::env::current_exe() {
-        // Development: binary is in target/debug or target/release
-        let workspace_root = exe
-            .parent()? // debug/release
-            .parent()? // target
-            .parent()?; // workspace root
+        let workspace_root = exe.parent()?.parent()?.parent()?;
         let starters = workspace_root.join("starters");
         if starters.exists() {
             return Some(starters);
         }
     }
 
-    // Check current directory
     let local = PathBuf::from("starters");
     if local.exists() {
         return Some(local);
@@ -317,7 +457,7 @@ fn find_starters_dir() -> Option<PathBuf> {
     None
 }
 
-fn copy_dir_recursive(src: &std::path::Path, dest: &std::path::Path) -> Result<()> {
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     for entry in walkdir::WalkDir::new(src)
         .into_iter()
         .filter_map(|e| e.ok())
