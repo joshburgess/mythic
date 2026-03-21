@@ -1,4 +1,38 @@
 //! Hook-based plugin system for extending the build pipeline.
+//!
+//! Implement the [`Plugin`] trait to create native Rust plugins, or use
+//! [Rhai scripts](crate::rhai_plugin) for user-defined plugins without compilation.
+//!
+//! # Hook points
+//!
+//! | Hook | When | Can mutate |
+//! |------|------|------------|
+//! | `on_pre_build` | Before anything runs | Config (read-only) |
+//! | `on_page_discovered` | After frontmatter parsed | Page |
+//! | `on_pre_render` | Before markdown rendering | Page |
+//! | `on_post_render` | After markdown rendering | Page |
+//! | `on_post_build` | After all pages written | Report (read-only) |
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use mythic_core::plugin::Plugin;
+//! use mythic_core::page::Page;
+//! use anyhow::Result;
+//!
+//! struct WordCountPlugin;
+//!
+//! impl Plugin for WordCountPlugin {
+//!     fn name(&self) -> &str { "word-count" }
+//!
+//!     fn on_page_discovered(&self, page: &mut Page) -> Result<()> {
+//!         let count = page.raw_content.split_whitespace().count();
+//!         let extra = page.frontmatter.extra.get_or_insert_with(Default::default);
+//!         extra.insert("word_count".into(), count.into());
+//!         Ok(())
+//!     }
+//! }
+//! ```
 
 use anyhow::Result;
 

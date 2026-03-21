@@ -1,4 +1,16 @@
 //! Build pipeline orchestration with optional profiling.
+//!
+//! The build pipeline flows through these stages:
+//!
+//! 1. **Discovery** — Walk the content directory, read files, parse frontmatter
+//! 2. **Draft filtering** — Remove drafts unless `--drafts` is passed
+//! 3. **Cache check** — Load content hashes from `.mythic-cache.json`
+//! 4. **Render** — Convert markdown to HTML (pluggable via `render_fn`)
+//! 5. **Template** — Apply layout templates (pluggable via `template_fn`)
+//! 6. **Output** — Write changed pages to disk in parallel, update cache
+//!
+//! Use [`build`] for standard builds or [`build_with_profile`] to get
+//! per-stage timing breakdowns.
 
 use anyhow::Result;
 use rayon::prelude::*;

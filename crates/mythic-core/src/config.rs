@@ -4,10 +4,30 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// Top-level site configuration.
+/// Top-level site configuration, deserialized from `mythic.toml`.
+///
+/// Required fields: `title` and `base_url`. All other fields have sensible
+/// defaults and are optional in the config file.
+///
+/// # Example
+///
+/// ```toml
+/// title = "My Site"
+/// base_url = "https://example.com"
+///
+/// [[taxonomies]]
+/// name = "tags"
+/// slug = "tags"
+/// feed = true
+///
+/// [highlight]
+/// theme = "base16-ocean.dark"
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SiteConfig {
+    /// Site title, used in templates as `{{ site.title }}`.
     pub title: String,
+    /// Base URL for the site, used for absolute links, feeds, and sitemaps.
     pub base_url: String,
     #[serde(default = "default_content_dir")]
     pub content_dir: PathBuf,
