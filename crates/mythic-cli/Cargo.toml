@@ -13,3 +13,6 @@ mythic-assets = { path = "../mythic-assets" }
 mythic-server = { path = "../mythic-server" }
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -107,4 +107,103 @@ mod tests {
         let (fm, _) = parse_frontmatter(input).unwrap();
         assert_eq!(fm.layout.as_deref(), Some("default"));
     }
+
+    #[test]
+    fn custom_layout() {
+        let input = "---\ntitle: Post\nlayout: blog\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.layout.as_deref(), Some("blog"));
+    }
+
+    #[test]
+    fn draft_true() {
+        let input = "---\ntitle: Draft\ndraft: true\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.draft, Some(true));
+    }
+
+    #[test]
+    fn draft_false() {
+        let input = "---\ntitle: Published\ndraft: false\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.draft, Some(false));
+    }
+
+    #[test]
+    fn extra_fields_preserved() {
+        let input = "---\ntitle: Extra\nextra:\n  author: Alice\n  featured: true\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        let extra = fm.extra.unwrap();
+        assert_eq!(extra["author"], "Alice");
+        assert_eq!(extra["featured"], true);
+    }
+
+    #[test]
+    fn empty_tags_list() {
+        let input = "---\ntitle: No Tags\ntags: []\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert!(fm.tags.unwrap().is_empty());
+    }
+
+    #[test]
+    fn body_preserves_content() {
+        let input = "---\ntitle: Test\n---\n\n# Heading\n\nParagraph with **bold**.\n\n- list item\n";
+        let (_, body) = parse_frontmatter(input).unwrap();
+        assert!(body.contains("# Heading"));
+        assert!(body.contains("**bold**"));
+        assert!(body.contains("- list item"));
+    }
+
+    #[test]
+    fn yaml_with_multiline_string() {
+        let input = "---\ntitle: \"Multi: line\"\ndate: \"2024-01-15\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "Multi: line");
+    }
+
+    #[test]
+    fn toml_with_all_fields() {
+        let input = "+++\ntitle = \"TOML All\"\ndate = \"2024-06-15\"\ndraft = false\nlayout = \"post\"\ntags = [\"a\", \"b\"]\n+++\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "TOML All");
+        assert_eq!(fm.date.as_deref(), Some("2024-06-15"));
+        assert_eq!(fm.draft, Some(false));
+        assert_eq!(fm.layout.as_deref(), Some("post"));
+        assert_eq!(fm.tags.unwrap(), vec!["a", "b"]);
+    }
+
+    #[test]
+    fn unclosed_toml_delimiter() {
+        let input = "+++\ntitle = \"Broken\"\nNo closing delimiter";
+        assert!(parse_frontmatter(input).is_err());
+    }
+
+    #[test]
+    fn empty_body_after_frontmatter() {
+        let input = "---\ntitle: Empty\n---\n";
+        let (fm, body) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "Empty");
+        assert!(body.is_empty());
+    }
+
+    #[test]
+    fn frontmatter_with_special_characters() {
+        let input = "---\ntitle: \"Hello & <World>\"\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.title, "Hello & <World>");
+    }
+
+    #[test]
+    fn sitemap_field() {
+        let input = "---\ntitle: Hidden\nsitemap: false\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.sitemap, Some(false));
+    }
+
+    #[test]
+    fn locale_field() {
+        let input = "---\ntitle: Spanish\nlocale: es\n---\nBody";
+        let (fm, _) = parse_frontmatter(input).unwrap();
+        assert_eq!(fm.locale.as_deref(), Some("es"));
+    }
 }

@@ -316,4 +316,198 @@ mod tests {
         let prof = report.profile.unwrap();
         assert!(prof.discovery_ms + prof.render_ms + prof.template_ms + prof.output_ms <= report.elapsed_ms + 1);
     }
+
+    // --- Incremental build depth ---
+
+    #[test]
+    fn adding_new_file_rebuilds_only_new() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
+
+        do_build(&config, dir.path());
+
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nPage B").unwrap();
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_written, 1);
+        assert_eq!(report.pages_unchanged, 1);
+        assert_eq!(report.total_pages, 2);
+    }
+
+    #[test]
+    fn deleting_file_does_not_break_build() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nA").unwrap();
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nB").unwrap();
+
+        do_build(&config, dir.path());
+        std::fs::remove_file(content.join("b.md")).unwrap();
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.total_pages, 1);
+        assert_eq!(report.pages_unchanged, 1);
+    }
+
+    #[test]
+    fn changing_frontmatter_only_rebuilds_page() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: Old Title\n---\nBody").unwrap();
+
+        do_build(&config, dir.path());
+        std::fs::write(content.join("a.md"), "---\ntitle: New Title\n---\nBody").unwrap();
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_written, 1);
+    }
+
+    #[test]
+    fn multiple_rebuilds_stay_consistent() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nA").unwrap();
+
+        // Build 5 times with no changes
+        for _ in 0..5 {
+            let report = do_build(&config, dir.path());
+            assert_eq!(report.total_pages, 1);
+        }
+
+        // Only the first should write; check cache is stable
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_unchanged, 1);
+        assert_eq!(report.pages_written, 0);
+    }
+
+    #[test]
+    fn draft_then_undraft_rebuilds() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\ndraft: true\n---\nA").unwrap();
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_skipped, 1);
+        assert_eq!(report.pages_written, 0);
+
+        // Undraft
+        std::fs::write(content.join("a.md"), "---\ntitle: A\ndraft: false\n---\nA").unwrap();
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_skipped, 0);
+        assert_eq!(report.pages_written, 1);
+    }
+
+    #[test]
+    fn include_drafts_flag_overrides() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: Draft\ndraft: true\n---\nDraft").unwrap();
+
+        let report = build(&config, dir.path(), true, noop_render, None::<NoTemplate>).unwrap();
+        assert_eq!(report.pages_skipped, 0);
+        assert_eq!(report.pages_written, 1);
+    }
+
+    // --- Output correctness ---
+
+    #[test]
+    fn clean_urls_produce_index_html() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("about.md"), "---\ntitle: About\n---\nAbout page").unwrap();
+
+        do_build(&config, dir.path());
+
+        let output = dir.path().join("public/about/index.html");
+        assert!(output.exists(), "Expected clean URL: public/about/index.html");
+        let html = std::fs::read_to_string(output).unwrap();
+        assert!(html.contains("About page"));
+    }
+
+    #[test]
+    fn nested_content_produces_nested_output() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("content/blog/2024");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("post.md"), "---\ntitle: Post\n---\nDeep post").unwrap();
+
+        do_build(&config, dir.path());
+
+        let output = dir.path().join("public/blog/2024/post/index.html");
+        assert!(output.exists());
+    }
+
+    #[test]
+    fn empty_content_dir_builds_zero_pages() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("content")).unwrap();
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.total_pages, 0);
+        assert_eq!(report.pages_written, 0);
+    }
+
+    #[test]
+    fn missing_content_dir_builds_zero_pages() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        // Don't create content dir at all
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.total_pages, 0);
+    }
+
+    #[test]
+    fn template_fn_is_applied() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nBody").unwrap();
+
+        let tmpl_fn = |page: &Page, _cfg: &SiteConfig| -> Result<String> {
+            Ok(format!("<html><body>{}</body></html>", page.rendered_html.as_deref().unwrap_or("")))
+        };
+
+        build(&config, dir.path(), false, noop_render, Some(tmpl_fn)).unwrap();
+
+        let output = std::fs::read_to_string(dir.path().join("public/a/index.html")).unwrap();
+        assert!(output.contains("<html><body>"));
+        assert!(output.contains("Body"));
+    }
+
+    // --- Error handling ---
+
+    #[test]
+    fn template_error_propagates() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nBody").unwrap();
+
+        let bad_tmpl = |_page: &Page, _cfg: &SiteConfig| -> Result<String> {
+            anyhow::bail!("Template rendering failed")
+        };
+
+        let result = build(&config, dir.path(), false, noop_render, Some(bad_tmpl));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Template rendering failed"));
+    }
 }

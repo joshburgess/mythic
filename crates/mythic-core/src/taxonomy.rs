@@ -261,4 +261,109 @@ mod tests {
         assert_eq!(taxonomies[0].terms.len(), 1); // tags: rust
         assert_eq!(taxonomies[1].terms.len(), 1); // categories: tutorials
     }
+
+    #[test]
+    fn pages_sorted_by_date_descending() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Old", "old", vec!["rust"], Some("2023-01-01")),
+            page_with_tags("Mid", "mid", vec!["rust"], Some("2024-06-15")),
+            page_with_tags("New", "new", vec!["rust"], Some("2024-12-01")),
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let rust = taxonomies[0].terms.iter().find(|t| t.name == "rust").unwrap();
+        assert_eq!(rust.pages[0].title, "New");
+        assert_eq!(rust.pages[1].title, "Mid");
+        assert_eq!(rust.pages[2].title, "Old");
+    }
+
+    #[test]
+    fn no_tags_produces_empty_taxonomy() {
+        let config = config_with_tags();
+        let pages = vec![
+            Page {
+                source_path: PathBuf::from("no-tags.md"),
+                slug: "no-tags".to_string(),
+                frontmatter: Frontmatter {
+                    title: "No Tags".to_string(),
+                    ..Default::default()
+                },
+                raw_content: String::new(),
+                rendered_html: None,
+                output_path: None,
+                content_hash: 0,
+                toc: Vec::new(),
+            },
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        assert_eq!(taxonomies[0].terms.len(), 0);
+    }
+
+    #[test]
+    fn no_taxonomies_configured() {
+        let config = SiteConfig::for_testing("Test", "http://localhost");
+        let pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        assert!(taxonomies.is_empty());
+    }
+
+    #[test]
+    fn term_slugs_are_lowercased() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["Rust", "WEB"], None),
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let terms: Vec<&str> = taxonomies[0].terms.iter().map(|t| t.slug.as_str()).collect();
+        assert!(terms.contains(&"rust"));
+        assert!(terms.contains(&"web"));
+    }
+
+    #[test]
+    fn taxonomy_page_urls_are_correct() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "blog/my-post", vec!["rust"], None),
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let rust = &taxonomies[0].terms[0];
+        assert_eq!(rust.pages[0].url, "/blog/my-post/");
+    }
+
+    #[test]
+    fn generated_pages_have_correct_layouts() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["rust"], None),
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let generated = generate_taxonomy_pages(&taxonomies);
+
+        let listing = generated.iter().find(|p| p.slug == "tags").unwrap();
+        assert_eq!(listing.frontmatter.layout.as_deref(), Some("taxonomy_list"));
+
+        let term = generated.iter().find(|p| p.slug == "tags/rust").unwrap();
+        assert_eq!(term.frontmatter.layout.as_deref(), Some("taxonomy_term"));
+    }
+
+    #[test]
+    fn page_in_multiple_terms() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Multi", "multi", vec!["rust", "web", "perf"], None),
+        ];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        assert_eq!(taxonomies[0].terms.len(), 3);
+        for term in &taxonomies[0].terms {
+            assert_eq!(term.pages.len(), 1);
+            assert_eq!(term.pages[0].title, "Multi");
+        }
+    }
 }

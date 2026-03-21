@@ -324,4 +324,538 @@ mod tests {
         let page = test_page("nonexistent");
         assert!(engine.render(&page, &test_config()).is_err());
     }
+
+    // --- Comprehensive template rendering tests ---
+
+    /// Helper: create a Page with all context variables populated.
+    fn full_page(layout: &str) -> Page {
+        Page {
+            source_path: PathBuf::from("blog/my-post.md"),
+            slug: "my-post".to_string(),
+            frontmatter: Frontmatter {
+                title: "Full Page Title".to_string(),
+                date: Some("2025-06-15".to_string()),
+                draft: Some(false),
+                layout: Some(layout.to_string()),
+                tags: Some(vec![
+                    "rust".to_string(),
+                    "web".to_string(),
+                    "ssg".to_string(),
+                ]),
+                extra: None,
+                sitemap: Some(true),
+                locale: None,
+            },
+            raw_content: "# Hello".to_string(),
+            rendered_html: Some("<h1>Hello</h1><p>World</p>".to_string()),
+            output_path: None,
+            content_hash: 42,
+            toc: vec![
+                mythic_core::page::TocEntry {
+                    level: 1,
+                    text: "Hello".to_string(),
+                    id: "hello".to_string(),
+                },
+                mythic_core::page::TocEntry {
+                    level: 2,
+                    text: "Sub Section".to_string(),
+                    id: "sub-section".to_string(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn tera_all_context_variables() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("post.html"),
+            concat!(
+                "<html><head><title>{{ page.title }} | {{ site.title }}</title></head>",
+                "<body>",
+                "<p>Date: {{ page.date }}</p>",
+                "<p>Tags: {% for tag in page.tags %}{{ tag }}{% if not loop.last %}, {% endif %}{% endfor %}</p>",
+                "<p>Base: {{ site.base_url | safe }}</p>",
+                "<div>{{ content | safe }}</div>",
+                "{% for entry in toc %}<a href=\"#{{ entry.id }}\">{{ entry.text }}</a>{% endfor %}",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("post");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("Full Page Title | My Site"));
+        assert!(html.contains("Date: 2025-06-15"));
+        assert!(html.contains("rust, web, ssg"));
+        assert!(html.contains("Base: http://localhost:3000"));
+        assert!(html.contains("<h1>Hello</h1><p>World</p>"));
+        assert!(html.contains("href=\"#hello\""));
+        assert!(html.contains("Sub Section"));
+    }
+
+    #[test]
+    fn tera_template_inheritance() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("base.html"),
+            concat!(
+                "<!DOCTYPE html><html><head><title>{% block title %}Default{% endblock %}</title></head>",
+                "<body>{% block body %}{% endblock %}</body></html>",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("child.html"),
+            concat!(
+                "{% extends \"base.html\" %}",
+                "{% block title %}{{ page.title }}{% endblock %}",
+                "{% block body %}<article>{{ content | safe }}</article>{% endblock %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("child");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("<title>Test Page</title>"));
+        assert!(html.contains("<article><p>Hello world</p></article>"));
+    }
+
+    #[test]
+    fn tera_includes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("header.html"),
+            "<header>{{ site.title }}</header>",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("withinclude.html"),
+            concat!(
+                "{% include \"header.html\" %}",
+                "<main>{{ content | safe }}</main>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("withinclude");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<header>My Site</header>"));
+        assert!(html.contains("<main><p>Hello world</p></main>"));
+    }
+
+    #[test]
+    fn tera_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("filters.html"),
+            concat!(
+                "<p>{{ content | safe }}</p>",
+                "<p>{{ page.title | upper }}</p>",
+                "<p>{{ page.title | lower }}</p>",
+                "{% if page.tags %}<p>{{ page.tags | length }}</p>{% endif %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("filters");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<h1>Hello</h1><p>World</p>"));
+        assert!(html.contains("FULL PAGE TITLE"));
+        assert!(html.contains("full page title"));
+        assert!(html.contains("<p>3</p>"));
+    }
+
+    #[test]
+    fn tera_for_loop_over_tags() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("taglist.html"),
+            concat!(
+                "<ul>",
+                "{% for tag in page.tags %}<li>{{ tag }}</li>{% endfor %}",
+                "</ul>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("taglist");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<li>rust</li>"));
+        assert!(html.contains("<li>web</li>"));
+        assert!(html.contains("<li>ssg</li>"));
+    }
+
+    #[test]
+    fn tera_if_else_conditionals() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("cond.html"),
+            concat!(
+                "{% if page.date %}<time>{{ page.date }}</time>",
+                "{% else %}<span>No date</span>{% endif %}",
+                "{% if page.draft %}<span>DRAFT</span>",
+                "{% else %}<span>PUBLISHED</span>{% endif %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let config = test_config();
+
+        // Page with date and draft=false
+        let page = full_page("cond");
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("<time>2025-06-15</time>"));
+        assert!(html.contains("PUBLISHED"));
+
+        // Page without date
+        let mut page_no_date = test_page("cond");
+        page_no_date.frontmatter.date = None;
+        let html2 = engine.render(&page_no_date, &config).unwrap();
+        assert!(html2.contains("<span>No date</span>"));
+    }
+
+    #[test]
+    fn hbs_triple_stash_raw_html() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("raw.hbs"),
+            "<div>{{page.title}}</div><div>{{{content}}}</div>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("raw");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        // Triple-stash should preserve raw HTML without escaping
+        assert!(html.contains("<p>Hello world</p>"));
+        assert!(html.contains("<div>Test Page</div>"));
+    }
+
+    #[test]
+    fn hbs_helpers_if_each_unless() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("helpers.hbs"),
+            concat!(
+                "{{#if page.date}}<time>{{page.date}}</time>{{else}}<span>No date</span>{{/if}}",
+                "{{#each page.tags}}<span class=\"tag\">{{this}}</span>{{/each}}",
+                "{{#unless page.draft}}<span>live</span>{{/unless}}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("helpers");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<time>2025-06-15</time>"));
+        assert!(html.contains("<span class=\"tag\">rust</span>"));
+        assert!(html.contains("<span class=\"tag\">web</span>"));
+        assert!(html.contains("<span class=\"tag\">ssg</span>"));
+        assert!(html.contains("<span>live</span>"));
+    }
+
+    #[test]
+    fn hbs_site_context() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("siteinfo.hbs"),
+            "<h1>{{site.title}}</h1><a href=\"{{site.base_url}}\">Home</a>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("siteinfo");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<h1>My Site</h1>"));
+        assert!(html.contains("href=\"http://localhost:3000\""));
+    }
+
+    #[test]
+    fn tera_assets_context() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("withassets.html"),
+            concat!(
+                "<link rel=\"stylesheet\" href=\"{{ assets.css_path | safe }}\">",
+                "<script src=\"{{ assets.js_path | safe }}\"></script>",
+                "<div>{{ content | safe }}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("withassets");
+        let config = test_config();
+
+        let assets = serde_json::json!({
+            "css_path": "/assets/style.abc123.css",
+            "js_path": "/assets/app.def456.js"
+        });
+
+        let html = engine
+            .render_with_assets(&page, &config, Some(&assets))
+            .unwrap();
+
+        assert!(html.contains("href=\"/assets/style.abc123.css\""));
+        assert!(html.contains("src=\"/assets/app.def456.js\""));
+        assert!(html.contains("<p>Hello world</p>"));
+    }
+
+    #[test]
+    fn hbs_assets_context() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("withassets.hbs"),
+            concat!(
+                "<link rel=\"stylesheet\" href=\"{{assets.css_path}}\">",
+                "<script src=\"{{assets.js_path}}\"></script>",
+                "<div>{{{content}}}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("withassets");
+        let config = test_config();
+
+        let assets = serde_json::json!({
+            "css_path": "/assets/style.abc123.css",
+            "js_path": "/assets/app.def456.js"
+        });
+
+        let html = engine
+            .render_with_assets(&page, &config, Some(&assets))
+            .unwrap();
+
+        assert!(html.contains("href=\"/assets/style.abc123.css\""));
+        assert!(html.contains("src=\"/assets/app.def456.js\""));
+    }
+
+    #[test]
+    fn empty_content_renders_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("empty.html"),
+            "<div>{{ content | safe }}</div>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("empty");
+        page.rendered_html = Some(String::new());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<div></div>"));
+    }
+
+    #[test]
+    fn none_content_renders_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("nohtml.html"),
+            "<div>{{ content | safe }}</div>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("nohtml");
+        page.rendered_html = None;
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<div></div>"));
+    }
+
+    #[test]
+    fn page_with_no_date_renders_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("nodate.html"),
+            concat!(
+                "{% if page.date %}<time>{{ page.date }}</time>{% endif %}",
+                "<h1>{{ page.title }}</h1>",
+                "<div>{{ content | safe }}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("nodate");
+        page.frontmatter.date = None;
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(!html.contains("<time>"));
+        assert!(html.contains("<h1>Test Page</h1>"));
+    }
+
+    #[test]
+    fn page_with_extra_data_accessible_in_tera_template() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("extra.html"),
+            concat!(
+                "<h1>{{ page.title }}</h1>",
+                "{% if page.extra.author %}<p>By {{ page.extra.author }}</p>{% endif %}",
+                "{% if page.extra.reading_time %}<span>{{ page.extra.reading_time }} min read</span>{% endif %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("extra");
+        let mut extra = HashMap::new();
+        extra.insert(
+            "author".to_string(),
+            serde_json::Value::String("Jane Doe".to_string()),
+        );
+        extra.insert(
+            "reading_time".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(5)),
+        );
+        page.frontmatter.extra = Some(extra);
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("By Jane Doe"));
+        assert!(html.contains("5 min read"));
+    }
+
+    #[test]
+    fn page_with_extra_data_accessible_in_hbs_template() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("extra.hbs"),
+            concat!(
+                "<h1>{{page.title}}</h1>",
+                "{{#if page.extra.author}}<p>By {{page.extra.author}}</p>{{/if}}",
+                "{{#if page.extra.reading_time}}<span>{{page.extra.reading_time}} min read</span>{{/if}}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("extra");
+        let mut extra = HashMap::new();
+        extra.insert(
+            "author".to_string(),
+            serde_json::Value::String("Jane Doe".to_string()),
+        );
+        extra.insert(
+            "reading_time".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(5)),
+        );
+        page.frontmatter.extra = Some(extra);
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("By Jane Doe"));
+        assert!(html.contains("5 min read"));
+    }
+
+    #[test]
+    fn tera_template_with_toc_data() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("withtoc.html"),
+            concat!(
+                "<nav>",
+                "{% for entry in toc %}",
+                "<a href=\"#{{ entry.id }}\" class=\"toc-h{{ entry.level }}\">{{ entry.text }}</a>",
+                "{% endfor %}",
+                "</nav>",
+                "<div>{{ content | safe }}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("withtoc");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("href=\"#hello\""));
+        assert!(html.contains("class=\"toc-h1\""));
+        assert!(html.contains(">Hello</a>"));
+        assert!(html.contains("href=\"#sub-section\""));
+        assert!(html.contains("class=\"toc-h2\""));
+        assert!(html.contains(">Sub Section</a>"));
+    }
+
+    #[test]
+    fn hbs_template_with_toc_data() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("withtoc.hbs"),
+            concat!(
+                "<nav>",
+                "{{#each toc}}",
+                "<a href=\"#{{this.id}}\" class=\"toc-h{{this.level}}\">{{this.text}}</a>",
+                "{{/each}}",
+                "</nav>",
+                "<div>{{{content}}}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("withtoc");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("href=\"#hello\""));
+        assert!(html.contains("class=\"toc-h1\""));
+        assert!(html.contains(">Hello</a>"));
+        assert!(html.contains("href=\"#sub-section\""));
+        assert!(html.contains("class=\"toc-h2\""));
+        assert!(html.contains(">Sub Section</a>"));
+    }
+
+    #[test]
+    fn empty_toc_renders_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("emptytoc.html"),
+            concat!(
+                "{% if toc %}<nav>",
+                "{% for entry in toc %}<a href=\"#{{ entry.id }}\">{{ entry.text }}</a>{% endfor %}",
+                "</nav>{% endif %}",
+                "<div>{{ content | safe }}</div>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("emptytoc"); // test_page has empty toc
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        // Empty vec is falsy in Tera, so nav should not appear
+        assert!(html.contains("<p>Hello world</p>"));
+    }
 }
