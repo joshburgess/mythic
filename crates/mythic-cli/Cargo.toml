@@ -1,0 +1,13 @@
+[package]
+name = "mythic-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { version = "4", features = ["derive"] }
+mythic-core = { path = "../mythic-core" }
+mythic-markdown = { path = "../mythic-markdown" }
+mythic-template = { path = "../mythic-template" }
+mythic-assets = { path = "../mythic-assets" }
+mythic-server = { path = "../mythic-server" }

@@ -1,0 +1,11 @@
+[package]
+name = "mythic-template"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tera = "1"
+mythic-core = { path = "../mythic-core" }

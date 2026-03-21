@@ -1,0 +1,5 @@
+title = "Basic Test Site"
+base_url = "http://localhost:3000"
+content_dir = "content"
+output_dir = "public"
+template_dir = "templates"

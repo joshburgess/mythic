@@ -1,0 +1,8 @@
+[package]
+name = "mythic-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+mythic-core = { path = "../mythic-core" }
