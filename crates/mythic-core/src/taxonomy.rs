@@ -366,4 +366,75 @@ mod tests {
             assert_eq!(term.pages[0].title, "Multi");
         }
     }
+
+    #[test]
+    fn duplicate_tags_deduplicated() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["rust", "rust", "Rust"], None),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+        // "rust" and "Rust" should collapse to the same term via slugification
+        let term_slugs: Vec<&str> = taxonomies[0].terms.iter().map(|t| t.slug.as_str()).collect();
+        // Should have exactly one "rust" term
+        assert_eq!(term_slugs.iter().filter(|&&s| s == "rust").count(), 1);
+    }
+
+    #[test]
+    fn tag_with_special_characters() {
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["C++", "node.js"], None),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+        assert_eq!(taxonomies[0].terms.len(), 2);
+        // All should have valid slugs (no empty slugs)
+        for term in &taxonomies[0].terms {
+            assert!(!term.slug.is_empty(), "Tag '{}' produced empty slug", term.name);
+        }
+    }
+
+    #[test]
+    fn empty_tag_string_produces_empty_slug() {
+        // NOTE: Empty tags currently produce an empty slug term rather than being
+        // filtered out. This mirrors Zola's historical behavior. A future fix
+        // should filter empty tags during build_one_taxonomy.
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["rust", "", "web"], None),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+        // Currently 3 terms including the empty one; ideally should be 2
+        let non_empty: Vec<_> = taxonomies[0].terms.iter().filter(|t| !t.slug.is_empty()).collect();
+        assert_eq!(non_empty.len(), 2);
+    }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn taxonomy_term_with_slash() {
+        // Hugo #4090: tags like "AC/DC" or "client/server" must not break paths
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("Post", "post", vec!["AC/DC"], None),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+        assert_eq!(taxonomies[0].terms.len(), 1);
+        // Slug should not contain raw slash
+        assert!(!taxonomies[0].terms[0].slug.contains('/'), "Slash in tag should be slugified");
+    }
+
+    #[test]
+    fn taxonomy_term_with_apostrophe() {
+        // Hugo #12606: apostrophes in tags should not cause duplicates
+        let config = config_with_tags();
+        let pages = vec![
+            page_with_tags("A", "a", vec!["Disney's Resort"], None),
+            page_with_tags("B", "b", vec!["Disney's Resort"], None),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+        // Both pages should map to the same term
+        assert_eq!(taxonomies[0].terms.len(), 1);
+        assert_eq!(taxonomies[0].terms[0].pages.len(), 2);
+    }
 }

@@ -407,4 +407,46 @@ mod tests {
         // Going from h3 back to h2 is fine, no warnings
         assert!(report.warnings.is_empty());
     }
+
+    #[test]
+    fn tel_links_not_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<a href=\"tel:+1234567890\">Call</a>"),
+        ]);
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn javascript_links_not_flagged() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<a href=\"javascript:void(0)\">Click</a>"),
+        ]);
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn link_with_query_string_resolved_correctly() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<a href=\"/about/?ref=nav\">About</a>"),
+            ("about/index.html", "<p>About</p>"),
+        ]);
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
+
+    #[test]
+    fn link_with_fragment_resolved_correctly() {
+        let dir = tempfile::tempdir().unwrap();
+        setup_site(dir.path(), &[
+            ("index.html", "<a href=\"/about/#team\">Team</a>"),
+            ("about/index.html", "<p>About</p>"),
+        ]);
+        let report = check_site(dir.path()).unwrap();
+        assert!(!report.has_errors());
+    }
 }

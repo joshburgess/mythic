@@ -522,4 +522,49 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Template rendering failed"));
     }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn parallel_build_is_deterministic() {
+        // Hugo #3013: parallel builds must produce consistent results
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        for i in 0..50 {
+            std::fs::write(
+                content.join(format!("page-{i}.md")),
+                format!("---\ntitle: Page {i}\n---\nContent {i}"),
+            ).unwrap();
+        }
+
+        // Build twice and compare outputs
+        let report1 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+
+        // Clean and rebuild
+        std::fs::remove_dir_all(dir.path().join("public")).unwrap();
+        let report2 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+
+        assert_eq!(report1.total_pages, report2.total_pages);
+        assert_eq!(report1.pages_written, report2.pages_written);
+    }
+
+    #[test]
+    fn frontmatter_change_invalidates_cache() {
+        // Hugo #12390: changing frontmatter must invalidate the cache
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: Original\n---\nBody").unwrap();
+
+        do_build(&config, dir.path());
+
+        // Change only frontmatter
+        std::fs::write(content.join("a.md"), "---\ntitle: Changed\n---\nBody").unwrap();
+        let report = do_build(&config, dir.path());
+        // The content hash should differ because the raw file changed
+        assert_eq!(report.pages_written, 1, "Frontmatter change should trigger rebuild");
+    }
 }

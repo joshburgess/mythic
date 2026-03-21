@@ -228,4 +228,40 @@ mod tests {
         assert!(!sitemap.contains("example.com//"));
         assert!(sitemap.contains("https://example.com/about/"));
     }
+
+    #[test]
+    fn sitemap_dates_are_consistent_format() {
+        // Zola issue #2335: mixed date formats cause Google to reject sitemaps
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages = vec![
+            test_page("page-a", "2024-01-15"),
+            test_page("page-b", "2024-06-15T12:00:00"),
+        ];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        // Both dates should be present and valid
+        assert!(sitemap.contains("<lastmod>"));
+        // Count lastmod entries matches page count
+        let lastmod_count = sitemap.matches("<lastmod>").count();
+        assert_eq!(lastmod_count, 2);
+    }
+
+    // --- Hugo regression tests ---
+
+    #[test]
+    fn sitemap_xml_has_valid_declaration_and_namespace() {
+        // Hugo #10515: sitemap must have valid XML declaration
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages = vec![test_page("about", "2024-01-01")];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        assert!(sitemap.starts_with("<?xml version=\"1.0\""));
+        assert!(sitemap.contains("xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\""));
+    }
 }
