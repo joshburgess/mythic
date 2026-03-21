@@ -31,6 +31,10 @@ pub struct SiteConfig {
     pub taxonomies: Vec<TaxonomyConfig>,
     #[serde(default)]
     pub feed: Option<FeedConfig>,
+    #[serde(default)]
+    pub highlight: Option<HighlightConfig>,
+    #[serde(default)]
+    pub toc: Option<TocConfig>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -70,6 +74,36 @@ fn default_feed_title() -> String {
 
 fn default_feed_entries() -> usize {
     20
+}
+
+/// Syntax highlighting configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HighlightConfig {
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    #[serde(default)]
+    pub line_numbers: bool,
+}
+
+fn default_theme() -> String {
+    "base16-ocean.dark".to_string()
+}
+
+/// Table of contents configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TocConfig {
+    #[serde(default = "default_min_level")]
+    pub min_level: u32,
+    #[serde(default = "default_max_level")]
+    pub max_level: u32,
+}
+
+fn default_min_level() -> u32 {
+    2
+}
+
+fn default_max_level() -> u32 {
+    4
 }
 
 fn default_content_dir() -> PathBuf {
@@ -117,6 +151,8 @@ impl SiteConfig {
             sass: None,
             taxonomies: Vec::new(),
             feed: None,
+            highlight: None,
+            toc: None,
         }
     }
 }

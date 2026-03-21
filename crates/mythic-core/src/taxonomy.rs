@@ -135,6 +135,7 @@ pub fn generate_taxonomy_pages(taxonomies: &[Taxonomy]) -> Vec<Page> {
             rendered_html: None,
             output_path: None,
             content_hash: 0,
+            toc: Vec::new(),
         });
 
         // Term pages: /{slug}/{term}/
@@ -155,6 +156,7 @@ pub fn generate_taxonomy_pages(taxonomies: &[Taxonomy]) -> Vec<Page> {
                 rendered_html: None,
                 output_path: None,
                 content_hash: 0,
+            toc: Vec::new(),
             });
         }
     }
@@ -181,6 +183,7 @@ mod tests {
             rendered_html: None,
             output_path: None,
             content_hash: 0,
+            toc: Vec::new(),
         }
     }
 

@@ -205,6 +205,7 @@ mod tests {
             rendered_html: Some("<p>Some content here</p>".to_string()),
             output_path: None,
             content_hash: 0,
+            toc: Vec::new(),
         }
     }
 

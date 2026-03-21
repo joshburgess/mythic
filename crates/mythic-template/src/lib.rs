@@ -82,6 +82,7 @@ mod tests {
             rendered_html: Some("<p>Hello world</p>".to_string()),
             output_path: None,
             content_hash: 0,
+            toc: Vec::new(),
         }
     }
 
