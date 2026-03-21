@@ -1,0 +1,9 @@
+title = "Mythic Documentation"
+base_url = "https://joshburgess.github.io/mythic"
+
+[highlight]
+theme = "base16-ocean.dark"
+
+[toc]
+min_level = 2
+max_level = 3

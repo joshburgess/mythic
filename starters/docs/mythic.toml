@@ -1,0 +1,9 @@
+title = "Documentation"
+base_url = "http://localhost:3000"
+
+[highlight]
+theme = "base16-ocean.dark"
+
+[toc]
+min_level = 2
+max_level = 3

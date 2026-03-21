@@ -1,0 +1,71 @@
+name: 'Mythic Build & Deploy'
+description: 'Build a Mythic static site and deploy to GitHub Pages'
+branding:
+  icon: 'zap'
+  color: 'purple'
+
+inputs:
+  version:
+    description: 'Mythic version to use (e.g., "v0.1.0" or "latest")'
+    required: false
+    default: 'latest'
+  config:
+    description: 'Path to mythic.toml config file'
+    required: false
+    default: 'mythic.toml'
+  build_args:
+    description: 'Additional arguments to pass to mythic build'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect runner architecture
+      id: detect
+      shell: bash
+      run: |
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64)  echo "target=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT ;;
+          Linux-aarch64) echo "target=aarch64-unknown-linux-gnu" >> $GITHUB_OUTPUT ;;
+          Darwin-x86_64) echo "target=x86_64-apple-darwin" >> $GITHUB_OUTPUT ;;
+          Darwin-arm64)  echo "target=aarch64-apple-darwin" >> $GITHUB_OUTPUT ;;
+          *)             echo "Unsupported platform" >&2; exit 1 ;;
+        esac
+
+    - name: Determine version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          VERSION=$(curl -fsSL https://api.github.com/repos/joshburgess/mythic/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        else
+          VERSION="${{ inputs.version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Cache Mythic binary
+      uses: actions/cache@v4
+      id: cache
+      with:
+        path: /usr/local/bin/mythic
+        key: mythic-${{ steps.version.outputs.version }}-${{ steps.detect.outputs.target }}
+
+    - name: Download Mythic
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -fsSL "https://github.com/joshburgess/mythic/releases/download/${{ steps.version.outputs.version }}/mythic-${{ steps.detect.outputs.target }}.tar.gz" -o mythic.tar.gz
+        tar xzf mythic.tar.gz
+        sudo mv mythic /usr/local/bin/mythic
+        chmod +x /usr/local/bin/mythic
+        rm mythic.tar.gz
+
+    - name: Build site
+      shell: bash
+      run: mythic build --config "${{ inputs.config }}" ${{ inputs.build_args }}
+
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: public
