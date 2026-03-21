@@ -114,7 +114,6 @@ where
 mod tests {
     use super::*;
     use crate::config::SiteConfig;
-    use std::path::PathBuf;
 
     fn noop_render(pages: &mut [Page]) {
         for page in pages {
@@ -123,14 +122,7 @@ mod tests {
     }
 
     fn test_config() -> SiteConfig {
-        SiteConfig {
-            title: "Test".to_string(),
-            base_url: "http://localhost".to_string(),
-            content_dir: PathBuf::from("content"),
-            output_dir: PathBuf::from("public"),
-            template_dir: PathBuf::from("templates"),
-            data_dir: PathBuf::from("_data"),
-        }
+        SiteConfig::for_testing("Test", "http://localhost")
     }
 
     type NoTemplate = fn(&Page, &SiteConfig) -> Result<String>;
