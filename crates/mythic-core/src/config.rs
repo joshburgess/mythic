@@ -241,4 +241,111 @@ mod tests {
     fn missing_file_returns_error() {
         assert!(load_config(Path::new("/nonexistent/mythic.toml")).is_err());
     }
+
+    #[test]
+    fn missing_required_title_returns_error() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "base_url = \"http://example.com\"\n").unwrap();
+        assert!(load_config(f.path()).is_err());
+    }
+
+    #[test]
+    fn missing_required_base_url_returns_error() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"Test\"\n").unwrap();
+        assert!(load_config(f.path()).is_err());
+    }
+
+    #[test]
+    fn custom_dirs_override_defaults() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\ncontent_dir = \"src\"\noutput_dir = \"dist\"\ntemplate_dir = \"layouts\"\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.content_dir, PathBuf::from("src"));
+        assert_eq!(config.output_dir, PathBuf::from("dist"));
+        assert_eq!(config.template_dir, PathBuf::from("layouts"));
+    }
+
+    #[test]
+    fn taxonomies_parsed_from_config() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[[taxonomies]]\nname = \"tags\"\nslug = \"tags\"\nfeed = true\n\n[[taxonomies]]\nname = \"categories\"\nslug = \"cat\"\nfeed = false\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.taxonomies.len(), 2);
+        assert_eq!(config.taxonomies[0].name, "tags");
+        assert!(config.taxonomies[0].feed);
+        assert_eq!(config.taxonomies[1].slug, "cat");
+        assert!(!config.taxonomies[1].feed);
+    }
+
+    #[test]
+    fn feed_config_parsed() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[feed]\ntitle = \"My Feed\"\nauthor = \"Alice\"\nentries = 10\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        let feed = config.feed.unwrap();
+        assert_eq!(feed.title, "My Feed");
+        assert_eq!(feed.author.unwrap(), "Alice");
+        assert_eq!(feed.entries, 10);
+    }
+
+    #[test]
+    fn highlight_config_parsed() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[highlight]\ntheme = \"monokai\"\nline_numbers = true\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        let hl = config.highlight.unwrap();
+        assert_eq!(hl.theme, "monokai");
+        assert!(hl.line_numbers);
+    }
+
+    #[test]
+    fn sass_config_parsed() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[sass]\nenabled = false\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert!(!config.sass.unwrap().enabled);
+    }
+
+    #[test]
+    fn i18n_config_parsed() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[i18n]\ndefault_locale = \"en\"\nlocales = [\"en\", \"es\", \"fr\"]\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        let i18n = config.i18n.unwrap();
+        assert_eq!(i18n.default_locale, "en");
+        assert_eq!(i18n.locales, vec!["en", "es", "fr"]);
+    }
+
+    #[test]
+    fn sitemap_config_parsed() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[sitemap]\nenabled = true\nchangefreq = \"daily\"\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        let sm = config.sitemap.unwrap();
+        assert!(sm.enabled);
+        assert_eq!(sm.changefreq, "daily");
+    }
+
+    #[test]
+    fn empty_file_returns_error() {
+        let f = NamedTempFile::new().unwrap();
+        assert!(load_config(f.path()).is_err());
+    }
+
+    #[test]
+    fn for_testing_produces_valid_config() {
+        let config = SiteConfig::for_testing("Test", "http://localhost");
+        assert_eq!(config.title, "Test");
+        assert_eq!(config.base_url, "http://localhost");
+        assert!(config.taxonomies.is_empty());
+        assert!(config.feed.is_none());
+    }
+
+    #[test]
+    fn error_message_includes_file_path() {
+        let result = load_config(Path::new("/some/path/mythic.toml"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("/some/path/mythic.toml"));
+    }
 }

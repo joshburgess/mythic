@@ -242,4 +242,69 @@ mod tests {
         let result = process_with_engine(input, &tera).unwrap();
         assert_eq!(result, input);
     }
+
+    #[test]
+    fn multiple_self_closing_shortcodes() {
+        let tera = setup_tera(&[(
+            "img.html",
+            r#"<img src="{{ src }}" alt="{{ alt }}">"#,
+        )]);
+
+        let input = r#"Before {{% img src="a.jpg" alt="A" %}} middle {{% img src="b.jpg" alt="B" %}} after"#;
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(result.contains("src=\"a.jpg\""));
+        assert!(result.contains("src=\"b.jpg\""));
+        assert!(result.contains("Before"));
+        assert!(result.contains("middle"));
+        assert!(result.contains("after"));
+    }
+
+    #[test]
+    fn shortcode_with_multiple_args() {
+        let tera = setup_tera(&[(
+            "video.html",
+            r#"<video src="{{ src }}" width="{{ width }}" autoplay="{{ autoplay }}"></video>"#,
+        )]);
+
+        let input = r#"{{% video src="clip.mp4" width="640" autoplay="true" %}}"#;
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(result.contains("src=\"clip.mp4\""));
+        assert!(result.contains("width=\"640\""));
+        assert!(result.contains("autoplay=\"true\""));
+    }
+
+    #[test]
+    fn paired_shortcode_with_markdown_inner() {
+        let tera = setup_tera(&[(
+            "details.html",
+            r#"<details><summary>{{ summary }}</summary>{{ inner | safe }}</details>"#,
+        )]);
+
+        let input = r#"{{% details summary="Click me" %}}**Bold** content with [link](https://example.com){{% /details %}}"#;
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(result.contains("<summary>Click me</summary>"));
+        assert!(result.contains("**Bold** content"));
+    }
+
+    #[test]
+    fn shortcode_surrounded_by_markdown() {
+        let tera = setup_tera(&[(
+            "hr.html",
+            "<hr class=\"fancy\">",
+        )]);
+
+        let input = "# Heading\n\nParagraph before.\n\n{{% hr %}}\n\nParagraph after.";
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(result.contains("# Heading"));
+        assert!(result.contains("<hr class=\"fancy\">"));
+        assert!(result.contains("Paragraph after."));
+    }
+
+    #[test]
+    fn error_message_includes_shortcode_name() {
+        let tera = Tera::default();
+        let input = "{{% missing_shortcode %}}";
+        let err = process_with_engine(input, &tera).unwrap_err();
+        assert!(err.to_string().contains("missing_shortcode"));
+    }
 }
