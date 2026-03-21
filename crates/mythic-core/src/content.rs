@@ -12,11 +12,12 @@ use crate::page::Page;
 /// Discover all markdown content files and return parsed Pages.
 pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
     let content_dir = root.join(&config.content_dir);
-    let mut pages = Vec::new();
 
     if !content_dir.exists() {
-        return Ok(pages);
+        return Ok(Vec::new());
     }
+
+    let mut pages = Vec::new();
 
     for entry in WalkDir::new(&content_dir)
         .into_iter()
@@ -47,17 +48,12 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
             hasher.finish()
         };
 
-        // Derive slug from relative path
-        let rel = path
-            .strip_prefix(&content_dir)
-            .unwrap_or(path);
+        let rel = path.strip_prefix(&content_dir).unwrap_or(path);
         let slug = rel
             .with_extension("")
             .to_string_lossy()
             .replace('\\', "/");
 
-        // Parse frontmatter — we'll do full parsing via mythic-markdown,
-        // but for discovery we do a lightweight split.
         let (frontmatter, body) = mythic_markdown_parse_stub(&raw);
 
         pages.push(Page {
@@ -76,11 +72,9 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
 }
 
 /// Lightweight frontmatter extraction for the discovery phase.
-/// Full parsing with validation lives in mythic-markdown.
 fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     use crate::page::Frontmatter;
 
-    // Try YAML frontmatter (---)
     if raw.starts_with("---") {
         if let Some(end) = raw[3..].find("---") {
             let yaml_str = &raw[3..3 + end];
@@ -91,7 +85,6 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
         }
     }
 
-    // Try TOML frontmatter (+++)
     if raw.starts_with("+++") {
         if let Some(end) = raw[3..].find("+++") {
             let toml_str = &raw[3..3 + end];
@@ -109,7 +102,6 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
 mod tests {
     use super::*;
     use crate::config::SiteConfig;
-    use std::path::PathBuf;
 
     fn fixture_config() -> SiteConfig {
         SiteConfig::for_testing("Test", "http://localhost")
