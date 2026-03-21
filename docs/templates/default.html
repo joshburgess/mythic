@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }} — {{ site.title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.7; color: #1a1a2e; display: flex; min-height: 100vh; }
+        .sidebar { width: 280px; background: #f8f9fb; border-right: 1px solid #e4e7ec; padding: 2rem 1.5rem; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+        .sidebar .logo { font-size: 1.3rem; font-weight: 700; color: #6c5ce7; margin-bottom: 2rem; text-decoration: none; display: block; }
+        .sidebar h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8892a4; margin: 1.5rem 0 0.5rem; }
+        .sidebar ul { list-style: none; }
+        .sidebar li { margin-bottom: 0.25rem; }
+        .sidebar a { color: #4a5568; text-decoration: none; font-size: 0.9rem; display: block; padding: 0.2rem 0.5rem; border-radius: 4px; }
+        .sidebar a:hover { background: #e8ecf1; color: #1a1a2e; }
+        .content { flex: 1; max-width: 52rem; padding: 3rem 4rem; }
+        .breadcrumb { color: #8892a4; font-size: 0.85rem; margin-bottom: 2rem; }
+        .breadcrumb a { color: #8892a4; text-decoration: none; }
+        .breadcrumb a:hover { color: #6c5ce7; }
+        h1 { font-size: 2.2rem; margin-bottom: 1rem; color: #1a1a2e; }
+        h2 { font-size: 1.5rem; margin-top: 2.5rem; margin-bottom: 0.75rem; color: #2d3748; padding-bottom: 0.3rem; border-bottom: 1px solid #e4e7ec; }
+        h3 { font-size: 1.15rem; margin-top: 1.5rem; margin-bottom: 0.5rem; color: #4a5568; }
+        p { margin-bottom: 1rem; color: #4a5568; }
+        pre { background: #2b303b; color: #c0c5ce; padding: 1.25rem; border-radius: 8px; overflow-x: auto; margin-bottom: 1.25rem; font-size: 0.9rem; }
+        code { font-family: "SF Mono", "Fira Code", Monaco, monospace; font-size: 0.9em; }
+        :not(pre) > code { background: #edf0f4; color: #6c5ce7; padding: 0.15rem 0.4rem; border-radius: 4px; }
+        ul, ol { margin-bottom: 1rem; padding-left: 1.5rem; color: #4a5568; }
+        li { margin-bottom: 0.3rem; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+        th, td { border: 1px solid #e4e7ec; padding: 0.6rem 0.8rem; text-align: left; }
+        th { background: #f8f9fb; font-weight: 600; font-size: 0.9rem; }
+        a { color: #6c5ce7; }
+        blockquote { border-left: 3px solid #6c5ce7; padding-left: 1rem; margin: 1rem 0; color: #666; }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid #e4e7ec; }
+            .content { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <a href="/" class="logo">Mythic</a>
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="/">Introduction</a></li>
+            <li><a href="/getting-started/installation/">Installation</a></li>
+            <li><a href="/getting-started/quickstart/">Quickstart</a></li>
+            <li><a href="/getting-started/project-structure/">Project Structure</a></li>
+        </ul>
+        <h3>Content</h3>
+        <ul>
+            <li><a href="/content/markdown/">Markdown</a></li>
+            <li><a href="/content/frontmatter/">Frontmatter</a></li>
+            <li><a href="/content/shortcodes/">Shortcodes</a></li>
+            <li><a href="/content/data-files/">Data Files</a></li>
+        </ul>
+        <h3>Templates</h3>
+        <ul>
+            <li><a href="/templates/tera/">Tera Guide</a></li>
+            <li><a href="/templates/handlebars/">Handlebars Guide</a></li>
+            <li><a href="/templates/context/">Context Reference</a></li>
+        </ul>
+        <h3>Configuration</h3>
+        <ul>
+            <li><a href="/configuration/reference/">Config Reference</a></li>
+        </ul>
+        <h3>Features</h3>
+        <ul>
+            <li><a href="/features/assets/">Asset Pipeline</a></li>
+            <li><a href="/features/taxonomies/">Taxonomies</a></li>
+            <li><a href="/features/i18n/">Internationalization</a></li>
+            <li><a href="/features/plugins/">Plugins</a></li>
+        </ul>
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="/deployment/github-pages/">GitHub Pages</a></li>
+            <li><a href="/deployment/other/">Netlify / Vercel / Cloudflare</a></li>
+        </ul>
+        <h3>Migration</h3>
+        <ul>
+            <li><a href="/migration/jekyll/">From Jekyll</a></li>
+            <li><a href="/migration/hugo/">From Hugo</a></li>
+            <li><a href="/migration/eleventy/">From Eleventy</a></li>
+        </ul>
+    </nav>
+    <main class="content">
+        <div class="breadcrumb">
+            <a href="/">Docs</a> / {{ page.title }}
+        </div>
+        {{ content | safe }}
+    </main>
+</body>
+</html>

@@ -47,6 +47,9 @@ enum Commands {
     Init {
         /// Project name
         name: String,
+        /// Starter template: blank, blog, docs, portfolio
+        #[arg(short, long, default_value = "blank")]
+        template: String,
     },
     /// Check the built site for broken links and issues
     Check {
@@ -89,8 +92,8 @@ fn main() -> Result<()> {
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(cmd_serve(&config, port, drafts, open))?;
         }
-        Commands::Init { name } => {
-            init_project(&name)?;
+        Commands::Init { name, template } => {
+            init_project(&name, &template)?;
         }
         Commands::Check { config } => {
             let site_config = mythic_core::config::load_config(&config)?;
@@ -246,56 +249,91 @@ async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -
     Ok(())
 }
 
-fn init_project(name: &str) -> Result<()> {
+fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
-    std::fs::create_dir_all(root.join("content"))?;
-    std::fs::create_dir_all(root.join("templates"))?;
 
-    std::fs::write(
-        root.join("mythic.toml"),
-        format!(
-            r#"title = "{name}"
-base_url = "http://localhost:3000"
-"#
-        ),
-    )?;
+    // Check for bundled starter templates
+    let starters_dir = find_starters_dir();
+    let starter_path = starters_dir.as_ref().and_then(|d| {
+        let p = d.join(template);
+        if p.exists() { Some(p) } else { None }
+    });
 
-    std::fs::write(
-        root.join("content/index.md"),
-        r#"---
-title: Welcome
----
-# Welcome to your new site
+    if let Some(starter) = starter_path {
+        copy_dir_recursive(&starter, &root)?;
+    } else {
+        // Fallback: generate a minimal blank site
+        std::fs::create_dir_all(root.join("content"))?;
+        std::fs::create_dir_all(root.join("templates"))?;
 
-Start editing `content/index.md` to get started.
-"#,
-    )?;
+        std::fs::write(
+            root.join("mythic.toml"),
+            format!("title = \"{name}\"\nbase_url = \"http://localhost:3000\"\n"),
+        )?;
 
-    std::fs::write(
-        root.join("templates/default.html"),
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ page.title }} — {{ site.title }}</title>
-</head>
-<body>
-    <main>
-        {{ content | safe }}
-    </main>
-</body>
-</html>
-"#,
-    )?;
+        std::fs::write(
+            root.join("content/index.md"),
+            "---\ntitle: Welcome\n---\n# Welcome to your new site\n\nStart editing `content/index.md` to get started.\n",
+        )?;
 
-    std::fs::write(
-        root.join(".gitignore"),
-        "/public\n.mythic-cache.json\n",
-    )?;
+        std::fs::write(
+            root.join("templates/default.html"),
+            "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n    <title>{{ page.title }} — {{ site.title }}</title>\n</head>\n<body>\n    <main>{{ content | safe }}</main>\n</body>\n</html>\n",
+        )?;
+    }
 
-    println!("Created new Mythic site in '{name}'");
-    println!("  cd {name} && mythic build");
+    // Always add .gitignore
+    let gitignore = root.join(".gitignore");
+    if !gitignore.exists() {
+        std::fs::write(&gitignore, "/public\n.mythic-cache.json\n")?;
+    }
 
+    println!("Created new Mythic site in '{name}' (template: {template})");
+    println!("  cd {name} && mythic serve");
+
+    Ok(())
+}
+
+fn find_starters_dir() -> Option<PathBuf> {
+    // Check relative to the binary, then common install paths
+    if let Ok(exe) = std::env::current_exe() {
+        // Development: binary is in target/debug or target/release
+        let workspace_root = exe
+            .parent()? // debug/release
+            .parent()? // target
+            .parent()?; // workspace root
+        let starters = workspace_root.join("starters");
+        if starters.exists() {
+            return Some(starters);
+        }
+    }
+
+    // Check current directory
+    let local = PathBuf::from("starters");
+    if local.exists() {
+        return Some(local);
+    }
+
+    None
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dest: &std::path::Path) -> Result<()> {
+    for entry in walkdir::WalkDir::new(src)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        let rel = path.strip_prefix(src).unwrap_or(path);
+        let target = dest.join(rel);
+
+        if path.is_dir() {
+            std::fs::create_dir_all(&target)?;
+        } else {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(path, &target)?;
+        }
+    }
     Ok(())
 }

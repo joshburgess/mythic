@@ -1,0 +1,286 @@
+---
+title: "Template Context"
+---
+
+# Template Context
+
+Every template in Mythic receives a context object containing page metadata, site information, rendered content, and data files. This reference documents all available variables.
+
+## page
+
+The `page` object contains metadata about the current page being rendered.
+
+| Variable               | Type          | Description                                      |
+|------------------------|---------------|--------------------------------------------------|
+| `page.title`           | String        | Page title from frontmatter                      |
+| `page.date`            | DateTime      | Publication date                                 |
+| `page.updated`         | DateTime      | Last updated date                                |
+| `page.draft`           | Boolean       | Whether the page is a draft                      |
+| `page.slug`            | String        | URL slug                                         |
+| `page.path`            | String        | Full URL path (e.g., `/blog/my-post/`)           |
+| `page.layout`          | String        | Template name used for rendering                 |
+| `page.description`     | String        | Page description from frontmatter                |
+| `page.tags`            | Array         | List of tag strings                              |
+| `page.categories`      | Array         | List of category strings                         |
+| `page.weight`          | Integer       | Sort weight                                      |
+| `page.locale`          | String        | Page locale (e.g., `en`, `fr`)                   |
+| `page.word_count`      | Integer       | Number of words in the content                   |
+| `page.reading_time`    | Integer       | Estimated reading time in minutes                |
+| `page.file`            | String        | Source file path relative to content/             |
+| `page.dir`             | String        | Directory containing the source file             |
+| `page.extra`           | Object        | Custom fields from frontmatter `extra`           |
+| `page.aliases`         | Array         | List of redirect aliases                         |
+
+### Usage Examples
+
+```html
+<!-- Tera -->
+<h1>{{ page.title }}</h1>
+
+{% if page.date %}
+<time datetime="{{ page.date | date(format='%Y-%m-%d') }}">
+    {{ page.date | date(format="%B %e, %Y") }}
+</time>
+{% endif %}
+
+{% if page.tags %}
+<ul class="tags">
+    {% for tag in page.tags %}
+    <li><a href="/tags/{{ tag | slugify }}/">{{ tag }}</a></li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<p>{{ page.word_count }} words &middot; {{ page.reading_time }} min read</p>
+```
+
+```html
+<!-- Handlebars -->
+<h1>{{page.title}}</h1>
+
+{{#if page.date}}
+<time datetime="{{date_format page.date "%Y-%m-%d"}}">
+    {{date_format page.date "%B %e, %Y"}}
+</time>
+{{/if}}
+
+{{#if page.tags}}
+<ul class="tags">
+    {{#each page.tags}}
+    <li><a href="/tags/{{slugify this}}/">{{this}}</a></li>
+    {{/each}}
+</ul>
+{{/if}}
+```
+
+## content
+
+The rendered HTML content of the current page. This is the Markdown body converted to HTML, with shortcodes processed.
+
+```html
+<!-- Tera: must use safe filter -->
+<div class="content">
+    {{ content | safe }}
+</div>
+
+<!-- Handlebars: must use triple-stash -->
+<div class="content">
+    {{{content}}}
+</div>
+```
+
+Always use `safe` (Tera) or triple curly braces (Handlebars) to prevent HTML escaping.
+
+## toc
+
+The generated table of contents as an HTML list, built from the headings in the content.
+
+```html
+<!-- Tera -->
+{% if toc %}
+<nav class="table-of-contents">
+    <h2>Contents</h2>
+    {{ toc | safe }}
+</nav>
+{% endif %}
+
+<!-- Handlebars -->
+{{#if toc}}
+<nav class="table-of-contents">
+    <h2>Contents</h2>
+    {{{toc}}}
+</nav>
+{{/if}}
+```
+
+The TOC is an ordered nested list of `<ul>` and `<li>` elements with anchor links.
+
+## site
+
+The `site` object contains global site information and page collections.
+
+| Variable              | Type     | Description                                        |
+|-----------------------|----------|----------------------------------------------------|
+| `site.title`          | String   | Site title from `mythic.toml`                      |
+| `site.base_url`       | String   | Base URL (e.g., `https://example.com`)             |
+| `site.language`       | String   | Default language code                              |
+| `site.description`    | String   | Site description                                   |
+| `site.pages`          | Array    | All non-draft pages                                |
+| `site.sections`       | Object   | Pages grouped by content section                   |
+| `site.taxonomies`     | Object   | Taxonomy terms and their pages                     |
+| `site.build_time`     | DateTime | Timestamp of the current build                     |
+
+### site.pages
+
+An array of all non-draft pages in the site. Each element has the same fields as `page`:
+
+```html
+{% for post in site.pages | sort_by(attribute="date") | reverse %}
+    {% if post.dir == "blog" %}
+    <article>
+        <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+        <time>{{ post.date | date(format="%Y-%m-%d") }}</time>
+        <p>{{ post.description }}</p>
+    </article>
+    {% endif %}
+{% endfor %}
+```
+
+### site.sections
+
+Pages grouped by their content directory:
+
+```html
+<!-- List all blog posts -->
+{% for post in site.sections.blog | sort_by(attribute="date") | reverse %}
+    <a href="{{ post.path }}">{{ post.title }}</a>
+{% endfor %}
+
+<!-- List documentation pages by weight -->
+{% for doc in site.sections.docs | sort_by(attribute="weight") %}
+    <a href="{{ doc.path }}">{{ doc.title }}</a>
+{% endfor %}
+```
+
+### site.taxonomies
+
+Access taxonomy terms and their associated pages:
+
+```html
+<!-- List all tags -->
+{% for tag in site.taxonomies.tags %}
+    <a href="/tags/{{ tag.slug }}/">
+        {{ tag.name }} ({{ tag.pages | length }})
+    </a>
+{% endfor %}
+
+<!-- In a taxonomy template, list pages for the current term -->
+{% for post in taxonomy_pages %}
+    <a href="{{ post.path }}">{{ post.title }}</a>
+{% endfor %}
+```
+
+## assets
+
+The `assets` object provides paths to processed asset files, including content hashes for cache busting.
+
+| Variable          | Type   | Description                                |
+|-------------------|--------|--------------------------------------------|
+| `assets.css`      | String | Path to the compiled CSS file              |
+| `assets.js`       | String | Path to the bundled JavaScript file        |
+
+```html
+<link rel="stylesheet" href="{{ assets.css }}">
+<script src="{{ assets.js }}" defer></script>
+```
+
+In production, these paths include content hashes:
+
+```html
+<link rel="stylesheet" href="/css/main.a1b2c3d4.css">
+<script src="/js/main.e5f6a7b8.js" defer></script>
+```
+
+## data
+
+The `data` object contains all loaded data files from the `_data/` directory. Keys correspond to filenames without extensions, and subdirectories create nested objects.
+
+```
+_data/
+  site.yaml       -> data.site
+  nav.toml        -> data.nav
+  authors.json    -> data.authors
+  social/
+    links.yaml    -> data.social.links
+```
+
+```html
+<!-- Access data -->
+<p>{{ data.site.tagline }}</p>
+
+{% for item in data.nav.main %}
+    <a href="{{ item.url }}">{{ item.label }}</a>
+{% endfor %}
+
+{% for author in data.authors %}
+    <span>{{ author.name }}</span>
+{% endfor %}
+```
+
+## Taxonomy Template Context
+
+When rendering taxonomy listing pages, additional variables are available:
+
+| Variable          | Type   | Description                                      |
+|-------------------|--------|--------------------------------------------------|
+| `taxonomy.name`   | String | Taxonomy name (e.g., `tags`)                     |
+| `taxonomy.slug`   | String | URL slug of the taxonomy                         |
+| `term.name`       | String | Current term name (e.g., `rust`)                 |
+| `term.slug`       | String | URL slug of the term                             |
+| `term.pages`      | Array  | Pages associated with this term                  |
+
+```html
+<!-- templates/taxonomy.tera.html -->
+<h1>{{ term.name }}</h1>
+<p>{{ term.pages | length }} posts tagged "{{ term.name }}"</p>
+
+{% for post in term.pages | sort_by(attribute="date") | reverse %}
+<article>
+    <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+    <time>{{ post.date | date(format="%Y-%m-%d") }}</time>
+</article>
+{% endfor %}
+```
+
+## Pagination Context
+
+When pagination is enabled, a `paginator` object is available:
+
+| Variable                  | Type    | Description                          |
+|---------------------------|---------|--------------------------------------|
+| `paginator.pages`         | Array   | Pages for the current page number    |
+| `paginator.current_page`  | Integer | Current page number (1-based)        |
+| `paginator.total_pages`   | Integer | Total number of pages                |
+| `paginator.previous_url`  | String  | URL to the previous page (or null)   |
+| `paginator.next_url`      | String  | URL to the next page (or null)       |
+| `paginator.total_items`   | Integer | Total number of items                |
+
+```html
+{% for post in paginator.pages %}
+<article>
+    <h2>{{ post.title }}</h2>
+</article>
+{% endfor %}
+
+<nav class="pagination">
+    {% if paginator.previous_url %}
+    <a href="{{ paginator.previous_url }}">Previous</a>
+    {% endif %}
+
+    <span>Page {{ paginator.current_page }} of {{ paginator.total_pages }}</span>
+
+    {% if paginator.next_url %}
+    <a href="{{ paginator.next_url }}">Next</a>
+    {% endif %}
+</nav>
+```

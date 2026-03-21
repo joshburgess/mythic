@@ -1660,6 +1660,7 @@ dependencies = [
  "mythic-server",
  "mythic-template",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]

@@ -1,0 +1,15 @@
+title = "My Blog"
+base_url = "http://localhost:3000"
+
+[[taxonomies]]
+name = "tags"
+slug = "tags"
+feed = true
+
+[feed]
+title = "My Blog Feed"
+author = "Author"
+entries = 20
+
+[highlight]
+theme = "base16-ocean.dark"
