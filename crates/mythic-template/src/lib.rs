@@ -118,6 +118,17 @@ impl TemplateEngine {
         config: &SiteConfig,
         assets: Option<&serde_json::Value>,
     ) -> Result<String> {
+        self.render_full(page, config, assets, None)
+    }
+
+    /// Render a page with full context: assets and site data.
+    pub fn render_full(
+        &self,
+        page: &Page,
+        config: &SiteConfig,
+        assets: Option<&serde_json::Value>,
+        data: Option<&serde_json::Value>,
+    ) -> Result<String> {
         let layout = page
             .frontmatter
             .layout
@@ -131,8 +142,8 @@ impl TemplateEngine {
             .unwrap_or(&self.default_engine);
 
         match engine {
-            "hbs" | "handlebars" => self.render_hbs(page, config, layout, assets),
-            _ => self.render_tera(page, config, layout, assets),
+            "hbs" | "handlebars" => self.render_hbs(page, config, layout, assets, data),
+            _ => self.render_tera(page, config, layout, assets, data),
         }
     }
 
@@ -142,6 +153,7 @@ impl TemplateEngine {
         config: &SiteConfig,
         layout: &str,
         assets: Option<&serde_json::Value>,
+        data: Option<&serde_json::Value>,
     ) -> Result<String> {
         let template_name = if self.tera.get_template(&format!("{layout}.html")).is_ok() {
             format!("{layout}.html")
@@ -165,6 +177,10 @@ impl TemplateEngine {
             ctx.insert("assets", assets);
         }
 
+        if let Some(data) = data {
+            ctx.insert("data", data);
+        }
+
         self.tera
             .render(&template_name, &ctx)
             .with_context(|| {
@@ -181,6 +197,7 @@ impl TemplateEngine {
         config: &SiteConfig,
         layout: &str,
         assets: Option<&serde_json::Value>,
+        site_data: Option<&serde_json::Value>,
     ) -> Result<String> {
         let template_name = format!("{layout}.hbs");
 
@@ -210,6 +227,10 @@ impl TemplateEngine {
 
         if let Some(assets) = assets {
             data.insert("assets".to_string(), assets.clone());
+        }
+
+        if let Some(site_data) = site_data {
+            data.insert("data".to_string(), site_data.clone());
         }
 
         self.hbs
