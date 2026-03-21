@@ -48,6 +48,8 @@ pub struct Frontmatter {
     pub tags: Option<Vec<String>>,
     #[serde(default)]
     pub extra: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub sitemap: Option<bool>,
 }
 
 fn default_layout() -> Option<String> {
