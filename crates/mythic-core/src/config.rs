@@ -27,6 +27,10 @@ pub struct SiteConfig {
     pub image_breakpoints: Option<Vec<u32>>,
     #[serde(default)]
     pub sass: Option<SassConfig>,
+    #[serde(default)]
+    pub taxonomies: Vec<TaxonomyConfig>,
+    #[serde(default)]
+    pub feed: Option<FeedConfig>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -38,6 +42,34 @@ pub struct SassConfig {
 
 fn default_true() -> bool {
     true
+}
+
+/// Taxonomy definition in config.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaxonomyConfig {
+    pub name: String,
+    pub slug: String,
+    #[serde(default)]
+    pub feed: bool,
+}
+
+/// Feed (Atom/RSS) configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedConfig {
+    #[serde(default = "default_feed_title")]
+    pub title: String,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default = "default_feed_entries")]
+    pub entries: usize,
+}
+
+fn default_feed_title() -> String {
+    "Feed".to_string()
+}
+
+fn default_feed_entries() -> usize {
+    20
 }
 
 fn default_content_dir() -> PathBuf {
@@ -83,6 +115,8 @@ impl SiteConfig {
             scripts_dir: default_scripts_dir(),
             image_breakpoints: None,
             sass: None,
+            taxonomies: Vec::new(),
+            feed: None,
         }
     }
 }

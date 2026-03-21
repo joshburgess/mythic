@@ -5,6 +5,10 @@
 
 pub mod build;
 pub mod cache;
+pub mod cascade;
 pub mod config;
 pub mod content;
+pub mod data;
+pub mod feed;
 pub mod page;
+pub mod taxonomy;
