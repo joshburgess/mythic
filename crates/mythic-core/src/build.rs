@@ -123,20 +123,18 @@ where
         }
     }
 
-    // Pre-create all output directories in one pass to avoid
-    // redundant create_dir_all calls during parallel writes.
+    // Pre-create output directories sequentially (avoids contention),
+    // then write files in parallel.
     {
-        let mut dirs: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
+        let mut seen = std::collections::HashSet::with_capacity(to_write.len());
         for page in &to_write {
-            let dest = output_dir.join(&page.slug);
-            dirs.insert(dest);
-        }
-        for dir in &dirs {
-            std::fs::create_dir_all(dir)?;
+            let dir = output_dir.join(&page.slug);
+            if seen.insert(dir.clone()) {
+                std::fs::create_dir_all(&dir)?;
+            }
         }
     }
 
-    // Parallel file writes (directories already exist)
     let write_errors: Vec<_> = to_write
         .par_iter()
         .filter_map(|page| {
