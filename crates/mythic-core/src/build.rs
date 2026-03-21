@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::path::Path;
 use std::time::Instant;
 
+use crate::cache::DepGraph;
 use crate::config::SiteConfig;
 use crate::content::discover_content;
 use crate::page::Page;
@@ -13,14 +14,12 @@ use crate::page::Page;
 pub struct BuildReport {
     pub total_pages: usize,
     pub pages_written: usize,
+    pub pages_unchanged: usize,
     pub pages_skipped: usize,
     pub elapsed_ms: u128,
 }
 
 /// Run the full build pipeline with pluggable render and template steps.
-///
-/// - `render_fn`: renders markdown to HTML on each page (mutates `rendered_html`)
-/// - `template_fn`: applies a template to a page, returning the final HTML string
 pub fn build<R, T>(
     config: &SiteConfig,
     root: &Path,
@@ -47,6 +46,10 @@ where
 
     let total_pages = pages.len();
 
+    // Load incremental cache
+    let output_dir = root.join(&config.output_dir);
+    let mut cache = DepGraph::load(&output_dir);
+
     // Render markdown
     render_fn(&mut pages);
 
@@ -58,46 +61,53 @@ where
         }
     }
 
-    // Write output files
-    let output_dir = root.join(&config.output_dir);
-    let pages_written = write_output(&pages, &output_dir)?;
+    // Write output files (incremental)
+    let mut pages_written = 0;
+    let mut pages_unchanged = 0;
+
+    for page in &pages {
+        let html = match &page.rendered_html {
+            Some(h) => h,
+            None => continue,
+        };
+
+        if !cache.is_changed(&page.slug, page.content_hash) {
+            pages_unchanged += 1;
+            continue;
+        }
+
+        let dest = output_dir.join(&page.slug).join("index.html");
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&dest, html)?;
+
+        cache.record(&page.slug, page.content_hash);
+        pages_written += 1;
+    }
+
+    cache.save()?;
 
     let elapsed_ms = start.elapsed().as_millis();
 
     let report = BuildReport {
         total_pages,
         pages_written,
+        pages_unchanged,
         pages_skipped,
         elapsed_ms,
     };
 
     println!(
-        "Built {} pages ({} written, {} drafts skipped) in {}ms",
-        report.total_pages, report.pages_written, report.pages_skipped, report.elapsed_ms
+        "Built {} pages ({} written, {} unchanged, {} drafts skipped) in {}ms",
+        report.total_pages,
+        report.pages_written,
+        report.pages_unchanged,
+        report.pages_skipped,
+        report.elapsed_ms
     );
 
     Ok(report)
-}
-
-fn write_output(pages: &[Page], output_dir: &Path) -> Result<usize> {
-    let mut written = 0;
-
-    for page in pages {
-        let html = match &page.rendered_html {
-            Some(h) => h,
-            None => continue,
-        };
-
-        // Clean URL: slug "blog/post" → output_dir/blog/post/index.html
-        let dest = output_dir.join(&page.slug).join("index.html");
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&dest, html)?;
-        written += 1;
-    }
-
-    Ok(written)
 }
 
 #[cfg(test)]
@@ -123,31 +133,80 @@ mod tests {
         }
     }
 
+    type NoTemplate = fn(&Page, &SiteConfig) -> Result<String>;
+
+    fn do_build(config: &SiteConfig, root: &Path) -> BuildReport {
+        build(config, root, false, noop_render, None::<NoTemplate>).unwrap()
+    }
+
     #[test]
-    fn build_fixture_site() {
+    fn full_build_writes_all_and_creates_cache() {
         let config = test_config();
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(
-            content.join("hello.md"),
-            "---\ntitle: Hello\n---\n# Hello World",
-        )
-        .unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nPage B").unwrap();
 
-        let report = build(
-            &config,
-            dir.path(),
-            false,
-            noop_render,
-            None::<fn(&Page, &SiteConfig) -> Result<String>>,
-        )
-        .unwrap();
-        assert_eq!(report.total_pages, 1);
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.total_pages, 2);
+        assert_eq!(report.pages_written, 2);
+        assert_eq!(report.pages_unchanged, 0);
+
+        let cache_path = dir.path().join("public/.mythic-cache.json");
+        assert!(cache_path.exists());
+    }
+
+    #[test]
+    fn noop_rebuild_writes_zero() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nPage B").unwrap();
+
+        do_build(&config, dir.path());
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_written, 0);
+        assert_eq!(report.pages_unchanged, 2);
+    }
+
+    #[test]
+    fn single_file_changed_rebuilds_only_that() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nPage B").unwrap();
+
+        do_build(&config, dir.path());
+
+        // Modify only one file
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A updated").unwrap();
+
+        let report = do_build(&config, dir.path());
         assert_eq!(report.pages_written, 1);
+        assert_eq!(report.pages_unchanged, 1);
+    }
 
-        let output = dir.path().join("public/hello/index.html");
-        assert!(output.exists());
+    #[test]
+    fn deleted_cache_forces_full_rebuild() {
+        let config = test_config();
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
+
+        do_build(&config, dir.path());
+
+        std::fs::remove_file(dir.path().join("public/.mythic-cache.json")).unwrap();
+
+        let report = do_build(&config, dir.path());
+        assert_eq!(report.pages_written, 1);
+        assert_eq!(report.pages_unchanged, 0);
     }
 
     #[test]
@@ -156,25 +215,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(
-            content.join("draft.md"),
-            "---\ntitle: Draft\ndraft: true\n---\nDraft content",
-        )
-        .unwrap();
-        std::fs::write(
-            content.join("published.md"),
-            "---\ntitle: Published\n---\nPublished content",
-        )
-        .unwrap();
+        std::fs::write(content.join("draft.md"), "---\ntitle: Draft\ndraft: true\n---\nDraft").unwrap();
+        std::fs::write(content.join("pub.md"), "---\ntitle: Pub\n---\nPublished").unwrap();
 
-        let report = build(
-            &config,
-            dir.path(),
-            false,
-            noop_render,
-            None::<fn(&Page, &SiteConfig) -> Result<String>>,
-        )
-        .unwrap();
+        let report = do_build(&config, dir.path());
         assert_eq!(report.pages_written, 1);
         assert_eq!(report.pages_skipped, 1);
     }
