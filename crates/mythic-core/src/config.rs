@@ -35,6 +35,8 @@ pub struct SiteConfig {
     pub highlight: Option<HighlightConfig>,
     #[serde(default)]
     pub toc: Option<TocConfig>,
+    #[serde(default)]
+    pub sitemap: Option<SitemapConfig>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -98,6 +100,19 @@ pub struct TocConfig {
     pub max_level: u32,
 }
 
+/// Sitemap generation configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SitemapConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_changefreq")]
+    pub changefreq: String,
+}
+
+fn default_changefreq() -> String {
+    "weekly".to_string()
+}
+
 fn default_min_level() -> u32 {
     2
 }
@@ -153,6 +168,7 @@ impl SiteConfig {
             feed: None,
             highlight: None,
             toc: None,
+            sitemap: None,
         }
     }
 }

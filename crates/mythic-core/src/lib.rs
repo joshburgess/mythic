@@ -6,6 +6,7 @@
 pub mod build;
 pub mod cache;
 pub mod cascade;
+pub mod check;
 pub mod config;
 pub mod content;
 pub mod data;
@@ -14,4 +15,5 @@ pub mod migrate;
 pub mod page;
 pub mod plugin;
 pub mod rhai_plugin;
+pub mod sitemap;
 pub mod taxonomy;

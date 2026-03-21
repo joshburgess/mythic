@@ -45,6 +45,12 @@ enum Commands {
         /// Project name
         name: String,
     },
+    /// Check the built site for broken links and issues
+    Check {
+        /// Path to config file
+        #[arg(short, long, default_value = "mythic.toml")]
+        config: PathBuf,
+    },
     /// Migrate from another static site generator
     Migrate {
         /// Source SSG: jekyll, hugo, or eleventy
@@ -81,6 +87,20 @@ fn main() -> Result<()> {
         }
         Commands::Init { name } => {
             init_project(&name)?;
+        }
+        Commands::Check { config } => {
+            let site_config = mythic_core::config::load_config(&config)?;
+            let root = config
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
+            let output_dir = root.join(&site_config.output_dir);
+
+            let report = mythic_core::check::check_site(&output_dir)?;
+            report.print_summary();
+
+            if report.has_errors() {
+                std::process::exit(1);
+            }
         }
         Commands::Migrate {
             from,
