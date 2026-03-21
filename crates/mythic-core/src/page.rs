@@ -21,6 +21,17 @@ pub struct Page {
     pub output_path: Option<PathBuf>,
     /// Content hash for incremental builds.
     pub content_hash: u64,
+    /// Table of contents extracted from headings.
+    #[serde(default)]
+    pub toc: Vec<TocEntry>,
+}
+
+/// A single heading entry in the table of contents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TocEntry {
+    pub level: u32,
+    pub text: String,
+    pub id: String,
 }
 
 /// Parsed frontmatter from a content file.

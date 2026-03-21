@@ -169,6 +169,7 @@ mod tests {
             rendered_html: None,
             output_path: None,
             content_hash: 0,
+            toc: Vec::new(),
         }
     }
 

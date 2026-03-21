@@ -1,0 +1,222 @@
+//! Table of contents extraction from rendered HTML.
+
+use mythic_core::page::TocEntry;
+use std::collections::HashMap;
+
+/// Extract headings from HTML and return TOC entries and modified HTML with IDs.
+pub fn extract_toc(html: &str, min_level: u32, max_level: u32) -> (Vec<TocEntry>, String) {
+    let mut entries = Vec::new();
+    let mut id_counts: HashMap<String, usize> = HashMap::new();
+    let mut modified = String::with_capacity(html.len());
+    let mut remaining = html;
+
+    while let Some(tag_start) = find_heading_tag(remaining) {
+        let before = &remaining[..tag_start];
+        modified.push_str(before);
+
+        let after_open = &remaining[tag_start..];
+
+        // Parse the heading level (h1-h6)
+        let level = match after_open.as_bytes().get(2) {
+            Some(b) if b.is_ascii_digit() => (*b - b'0') as u32,
+            _ => {
+                modified.push_str(&after_open[..1]);
+                remaining = &after_open[1..];
+                continue;
+            }
+        };
+
+        // Find the closing tag
+        let close_tag = format!("</h{level}>");
+        let Some(close_pos) = after_open.find(&close_tag) else {
+            modified.push_str(&after_open[..1]);
+            remaining = &after_open[1..];
+            continue;
+        };
+
+        // Find end of opening tag
+        let Some(tag_end) = after_open.find('>') else {
+            modified.push_str(&after_open[..1]);
+            remaining = &after_open[1..];
+            continue;
+        };
+
+        let inner_html = &after_open[tag_end + 1..close_pos];
+        let text = strip_html(inner_html);
+        let base_id = slugify_heading(&text);
+
+        // Handle duplicate IDs
+        let id = {
+            let count = id_counts.entry(base_id.clone()).or_insert(0);
+            *count += 1;
+            if *count == 1 {
+                base_id
+            } else {
+                format!("{base_id}-{}", *count - 1)
+            }
+        };
+
+        if level >= min_level && level <= max_level {
+            entries.push(TocEntry {
+                level,
+                text: text.clone(),
+                id: id.clone(),
+            });
+        }
+
+        // Write heading with id attribute
+        let opening_tag = &after_open[..tag_end];
+        if opening_tag.contains("id=") {
+            modified.push_str(&after_open[..close_pos + close_tag.len()]);
+        } else {
+            modified.push_str(&format!("<h{level} id=\"{id}\">"));
+            modified.push_str(inner_html);
+            modified.push_str(&close_tag);
+        }
+
+        remaining = &after_open[close_pos + close_tag.len()..];
+    }
+
+    modified.push_str(remaining);
+    (entries, modified)
+}
+
+/// Render a TOC as nested HTML navigation.
+pub fn render_toc_html(entries: &[TocEntry]) -> String {
+    if entries.is_empty() {
+        return String::new();
+    }
+
+    let mut html = String::from("<nav class=\"toc\">\n");
+    let mut current_level = 0u32;
+    let mut list_depth = 0u32;
+
+    for entry in entries {
+        while current_level < entry.level {
+            html.push_str("<ul>\n");
+            current_level += 1;
+            list_depth += 1;
+        }
+        while current_level > entry.level {
+            html.push_str("</ul>\n");
+            current_level -= 1;
+            list_depth -= 1;
+        }
+        html.push_str(&format!(
+            "<li><a href=\"#{}\">{}</a></li>\n",
+            entry.id, entry.text
+        ));
+    }
+
+    while list_depth > 0 {
+        html.push_str("</ul>\n");
+        list_depth -= 1;
+    }
+
+    html.push_str("</nav>");
+    html
+}
+
+fn find_heading_tag(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    for i in 0..bytes.len().saturating_sub(3) {
+        if bytes[i] == b'<'
+            && bytes[i + 1] == b'h'
+            && bytes[i + 2].is_ascii_digit()
+            && (bytes[i + 3] == b'>' || bytes[i + 3] == b' ')
+        {
+            let level = bytes[i + 2] - b'0';
+            if (1..=6).contains(&level) {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+fn strip_html(s: &str) -> String {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in s.chars() {
+        if c == '<' {
+            in_tag = true;
+        } else if c == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            text.push(c);
+        }
+    }
+    text
+}
+
+fn slugify_heading(text: &str) -> String {
+    text.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basic_toc_extraction() {
+        let html = "<h1>Title</h1>\n<p>text</p>\n<h2>Section A</h2>\n<p>more</p>\n<h2>Section B</h2>";
+        let (entries, modified) = extract_toc(html, 1, 6);
+
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].text, "Title");
+        assert_eq!(entries[0].level, 1);
+        assert_eq!(entries[0].id, "title");
+        assert_eq!(entries[1].text, "Section A");
+        assert_eq!(entries[2].text, "Section B");
+
+        assert!(modified.contains("id=\"title\""));
+        assert!(modified.contains("id=\"section-a\""));
+    }
+
+    #[test]
+    fn duplicate_id_handling() {
+        let html = "<h2>FAQ</h2>\n<h2>FAQ</h2>\n<h2>FAQ</h2>";
+        let (entries, modified) = extract_toc(html, 1, 6);
+
+        assert_eq!(entries[0].id, "faq");
+        assert_eq!(entries[1].id, "faq-1");
+        assert_eq!(entries[2].id, "faq-2");
+
+        assert!(modified.contains("id=\"faq\""));
+        assert!(modified.contains("id=\"faq-1\""));
+        assert!(modified.contains("id=\"faq-2\""));
+    }
+
+    #[test]
+    fn min_max_level_filtering() {
+        let html = "<h1>Title</h1>\n<h2>Section</h2>\n<h3>Sub</h3>\n<h5>Deep</h5>";
+        let (entries, _) = extract_toc(html, 2, 4);
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].text, "Section");
+        assert_eq!(entries[1].text, "Sub");
+    }
+
+    #[test]
+    fn nested_toc_html() {
+        let entries = vec![
+            TocEntry { level: 2, text: "A".to_string(), id: "a".to_string() },
+            TocEntry { level: 3, text: "A.1".to_string(), id: "a-1".to_string() },
+            TocEntry { level: 2, text: "B".to_string(), id: "b".to_string() },
+        ];
+
+        let html = render_toc_html(&entries);
+        assert!(html.contains("<nav class=\"toc\">"));
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("href=\"#a\""));
+        assert!(html.contains("href=\"#a-1\""));
+        assert!(html.contains("href=\"#b\""));
+    }
+}
