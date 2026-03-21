@@ -3,6 +3,7 @@
 //! Provides site configuration, content discovery, the build pipeline,
 //! and orchestration across the other crates.
 
+pub mod bench_utils;
 pub mod build;
 pub mod cache;
 pub mod cascade;
