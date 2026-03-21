@@ -48,7 +48,14 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
     for page in pages {
         let values = extract_taxonomy_values(&page.frontmatter, &tc.name);
         for value in values {
+            // Skip empty tag values
+            if value.trim().is_empty() {
+                continue;
+            }
             let slug = slugify(&value);
+            if slug.is_empty() {
+                continue;
+            }
             terms_map
                 .entry(slug)
                 .or_default()
@@ -106,7 +113,16 @@ fn extract_taxonomy_values(fm: &Frontmatter, taxonomy_name: &str) -> Vec<String>
 }
 
 fn slugify(s: &str) -> String {
-    s.to_lowercase()
+    // Transliterate common programming symbols before slugifying
+    let expanded = s
+        .replace("++", "-plus-plus")
+        .replace('+', "-plus")
+        .replace('#', "-sharp")
+        .replace('&', "-and")
+        .replace('@', "-at");
+
+    expanded
+        .to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect::<String>()
@@ -384,29 +400,27 @@ mod tests {
     fn tag_with_special_characters() {
         let config = config_with_tags();
         let pages = vec![
-            page_with_tags("Post", "post", vec!["C++", "node.js"], None),
+            page_with_tags("Post", "post", vec!["C++", "C#", "node.js"], None),
         ];
         let taxonomies = build_taxonomies(&config, &pages);
-        assert_eq!(taxonomies[0].terms.len(), 2);
-        // All should have valid slugs (no empty slugs)
+        // C++ → c-plus-plus, C# → c-sharp, node.js → node-js — all distinct
+        assert_eq!(taxonomies[0].terms.len(), 3,
+            "C++, C#, and node.js should produce 3 distinct slugs, got: {:?}",
+            taxonomies[0].terms.iter().map(|t| &t.slug).collect::<Vec<_>>());
         for term in &taxonomies[0].terms {
             assert!(!term.slug.is_empty(), "Tag '{}' produced empty slug", term.name);
         }
     }
 
     #[test]
-    fn empty_tag_string_produces_empty_slug() {
-        // NOTE: Empty tags currently produce an empty slug term rather than being
-        // filtered out. This mirrors Zola's historical behavior. A future fix
-        // should filter empty tags during build_one_taxonomy.
+    fn empty_tag_string_filtered() {
         let config = config_with_tags();
         let pages = vec![
             page_with_tags("Post", "post", vec!["rust", "", "web"], None),
         ];
         let taxonomies = build_taxonomies(&config, &pages);
-        // Currently 3 terms including the empty one; ideally should be 2
-        let non_empty: Vec<_> = taxonomies[0].terms.iter().filter(|t| !t.slug.is_empty()).collect();
-        assert_eq!(non_empty.len(), 2);
+        // Empty tags should be filtered out, leaving only "rust" and "web"
+        assert_eq!(taxonomies[0].terms.len(), 2);
     }
 
     // --- Hugo regression tests ---
