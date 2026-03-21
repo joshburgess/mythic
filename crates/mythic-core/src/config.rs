@@ -37,6 +37,10 @@ pub struct SiteConfig {
     pub toc: Option<TocConfig>,
     #[serde(default)]
     pub sitemap: Option<SitemapConfig>,
+    #[serde(default)]
+    pub templates: Option<TemplatesConfig>,
+    #[serde(default)]
+    pub i18n: Option<I18nConfig>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -113,6 +117,24 @@ fn default_changefreq() -> String {
     "weekly".to_string()
 }
 
+/// Template engine configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplatesConfig {
+    #[serde(default = "default_engine")]
+    pub default_engine: String,
+}
+
+fn default_engine() -> String {
+    "tera".to_string()
+}
+
+/// Internationalization configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct I18nConfig {
+    pub default_locale: String,
+    pub locales: Vec<String>,
+}
+
 fn default_min_level() -> u32 {
     2
 }
@@ -169,6 +191,8 @@ impl SiteConfig {
             highlight: None,
             toc: None,
             sitemap: None,
+            templates: None,
+            i18n: None,
         }
     }
 }

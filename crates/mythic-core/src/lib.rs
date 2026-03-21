@@ -11,6 +11,7 @@ pub mod config;
 pub mod content;
 pub mod data;
 pub mod feed;
+pub mod i18n;
 pub mod migrate;
 pub mod page;
 pub mod plugin;

@@ -50,6 +50,8 @@ pub struct Frontmatter {
     pub extra: Option<HashMap<String, serde_json::Value>>,
     #[serde(default)]
     pub sitemap: Option<bool>,
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 fn default_layout() -> Option<String> {
