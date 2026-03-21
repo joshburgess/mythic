@@ -24,6 +24,9 @@ enum Commands {
         /// Delete output directory before building
         #[arg(long)]
         clean: bool,
+        /// Print per-stage timing breakdown
+        #[arg(long)]
+        profile: bool,
     },
     /// Start the development server with live reload
     Serve {
@@ -73,8 +76,9 @@ fn main() -> Result<()> {
             config,
             drafts,
             clean,
+            profile,
         } => {
-            cmd_build(&config, drafts, clean)?;
+            cmd_build(&config, drafts, clean, profile)?;
         }
         Commands::Serve {
             config,
@@ -120,7 +124,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn cmd_build(config_path: &PathBuf, drafts: bool, clean: bool) -> Result<()> {
+fn cmd_build(config_path: &PathBuf, drafts: bool, clean: bool, profile: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
@@ -136,7 +140,7 @@ fn cmd_build(config_path: &PathBuf, drafts: bool, clean: bool) -> Result<()> {
     let template_dir = root.join(&site_config.template_dir);
     let engine = mythic_template::TemplateEngine::new(&template_dir)?;
 
-    mythic_core::build::build(
+    mythic_core::build::build_with_profile(
         &site_config,
         root,
         drafts,
@@ -144,6 +148,7 @@ fn cmd_build(config_path: &PathBuf, drafts: bool, clean: bool) -> Result<()> {
         Some(|page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
             engine.render(page, cfg)
         }),
+        profile,
     )?;
 
     Ok(())
