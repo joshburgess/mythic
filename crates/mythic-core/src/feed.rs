@@ -1,4 +1,4 @@
-//! Atom feed generation.
+//! Atom and RSS 2.0 feed generation.
 
 use crate::config::SiteConfig;
 use crate::page::Page;
@@ -37,6 +37,15 @@ pub fn generate_feeds(
     let feed_path = output_dir.join("feed.xml");
     std::fs::create_dir_all(output_dir)?;
     std::fs::write(&feed_path, &feed_xml)?;
+
+    // Also generate RSS 2.0
+    let rss_xml = render_rss_feed(
+        &feed_config.title,
+        &config.base_url,
+        feed_config.author.as_deref().unwrap_or(&config.title),
+        &feed_pages,
+    );
+    std::fs::write(output_dir.join("rss.xml"), &rss_xml)?;
 
     // Per-taxonomy feeds
     for taxonomy in taxonomies {
@@ -133,6 +142,59 @@ fn render_atom_feed(
     }
 
     xml.push_str("</feed>\n");
+    xml
+}
+
+fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -> String {
+    let base_url = base_url.trim_end_matches('/');
+    let pub_date = pages
+        .first()
+        .and_then(|p| p.frontmatter.date.as_deref())
+        .unwrap_or("1970-01-01");
+
+    let mut xml = String::new();
+    xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+    xml.push_str("<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n");
+    xml.push_str("<channel>\n");
+    xml.push_str(&format!("  <title>{}</title>\n", escape_xml(title)));
+    xml.push_str(&format!("  <link>{base_url}/</link>\n"));
+    xml.push_str(&format!(
+        "  <atom:link href=\"{base_url}/rss.xml\" rel=\"self\" type=\"application/rss+xml\"/>\n"
+    ));
+    xml.push_str(&format!("  <lastBuildDate>{pub_date}</lastBuildDate>\n"));
+    xml.push_str(&format!(
+        "  <managingEditor>{}</managingEditor>\n",
+        escape_xml(author)
+    ));
+
+    for page in pages {
+        let page_url = format!("{base_url}/{}/", page.slug);
+        let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
+
+        let summary = page
+            .rendered_html
+            .as_deref()
+            .or(Some(&page.raw_content))
+            .map(|s| strip_html_and_truncate(s, 200))
+            .unwrap_or_default();
+
+        xml.push_str("  <item>\n");
+        xml.push_str(&format!(
+            "    <title>{}</title>\n",
+            escape_xml(&page.frontmatter.title)
+        ));
+        xml.push_str(&format!("    <link>{page_url}</link>\n"));
+        xml.push_str(&format!("    <guid>{page_url}</guid>\n"));
+        xml.push_str(&format!("    <pubDate>{date}</pubDate>\n"));
+        xml.push_str(&format!(
+            "    <description>{}</description>\n",
+            escape_xml(&summary)
+        ));
+        xml.push_str("  </item>\n");
+    }
+
+    xml.push_str("</channel>\n");
+    xml.push_str("</rss>\n");
     xml
 }
 
