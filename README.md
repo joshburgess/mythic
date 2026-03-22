@@ -57,6 +57,8 @@ mythic new <type> "Title"       Create a new content file (--draft)
 mythic build                    Build the site (--clean, --drafts, --profile, --quiet)
 mythic serve                    Dev server with live reload (--port, --open)
 mythic check                    Validate links, images, and heading hierarchy
+mythic list                     List all content pages with dates and slugs (--drafts)
+mythic clean                    Delete the output directory
 mythic migrate --from <ssg>     Import from jekyll, hugo, or eleventy
 mythic completions <shell>      Generate shell completions (bash, zsh, fish, powershell)
 mythic --version                Show version
