@@ -15,6 +15,22 @@ use std::path::Path;
 pub struct AssetManifest {
     pub css_path: Option<String>,
     pub js_path: Option<String>,
+    /// SRI integrity hash for CSS (sha384).
+    pub css_integrity: Option<String>,
+    /// SRI integrity hash for JS (sha384).
+    pub js_integrity: Option<String>,
+}
+
+/// Compute a SHA-384 SRI hash for the given content.
+pub fn compute_sri(content: &str) -> String {
+    use base64::Engine;
+    use sha2::{Digest, Sha384};
+
+    let mut hasher = Sha384::new();
+    hasher.update(content.as_bytes());
+    let hash = hasher.finalize();
+    let b64 = base64::engine::general_purpose::STANDARD.encode(hash);
+    format!("sha384-{b64}")
 }
 
 /// Run the full asset pipeline and return the manifest.
@@ -41,6 +57,7 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
 
         if !css.is_empty() {
             let minified = styles::minify_css(&css);
+            manifest.css_integrity = Some(compute_sri(&minified));
             let path = styles::write_hashed(&minified, &output_dir)?;
             manifest.css_path = Some(format!("/{path}"));
         }
@@ -52,10 +69,31 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
         let js = scripts::concat_js(&scripts_dir)?;
         if !js.is_empty() {
             let minified = scripts::minify_js(&js);
+            manifest.js_integrity = Some(compute_sri(&minified));
             let path = scripts::write_hashed(&minified, &output_dir)?;
             manifest.js_path = Some(format!("/{path}"));
         }
     }
 
     Ok(manifest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sri_hash_is_deterministic() {
+        let h1 = compute_sri("body { color: red; }");
+        let h2 = compute_sri("body { color: red; }");
+        assert_eq!(h1, h2);
+        assert!(h1.starts_with("sha384-"));
+    }
+
+    #[test]
+    fn sri_hash_changes_with_content() {
+        let h1 = compute_sri("body { color: red; }");
+        let h2 = compute_sri("body { color: blue; }");
+        assert_ne!(h1, h2);
+    }
 }
