@@ -3,6 +3,7 @@
 pub mod convert;
 pub mod eleventy;
 pub mod hugo;
+pub mod hugo_theme;
 pub mod jekyll;
 
 use serde::{Deserialize, Serialize};

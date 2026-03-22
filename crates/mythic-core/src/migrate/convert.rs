@@ -144,16 +144,109 @@ pub fn go_template_to_tera(input: &str) -> (String, Vec<String>) {
     result.push_str(rest);
     output = result;
 
-    // Detect unconverted patterns
+    // {{ with .Params.X }}...{{ end }} → {% if page.extra.X %}...{% endif %}
+    let mut result = String::new();
+    let mut rest = output.as_str();
+    while let Some(start) = rest.find("{{ with ") {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 8..];
+        if let Some(end) = after.find(" }}") {
+            let expr = after[..end].trim();
+            let tera_expr = expr
+                .replace(".Params.", "page.extra.")
+                .replace(".Site.", "site.")
+                .trim_start_matches('.')
+                .to_string();
+            result.push_str(&format!("{{% if {tera_expr} %}}"));
+            rest = &after[end + 3..];
+        } else {
+            result.push_str(&rest[start..start + 8]);
+            rest = after;
+        }
+    }
+    result.push_str(rest);
+    output = result;
+
+    // {{ block "name" . }} → {% block name %}
+    let mut result = String::new();
+    let mut rest = output.as_str();
+    while let Some(start) = rest.find("{{ block ") {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 9..];
+        if let Some(end) = after.find(" }}") {
+            let name = after[..end]
+                .split_whitespace()
+                .next()
+                .unwrap_or("main")
+                .trim_matches('"');
+            result.push_str(&format!("{{% block {name} %}}"));
+            rest = &after[end + 3..];
+        } else {
+            result.push_str(&rest[start..start + 9]);
+            rest = after;
+        }
+    }
+    result.push_str(rest);
+    output = result;
+
+    // {{ define "name" }} → {% block name %}
+    let mut result = String::new();
+    let mut rest = output.as_str();
+    while let Some(start) = rest.find("{{ define ") {
+        result.push_str(&rest[..start]);
+        let after = &rest[start + 10..];
+        if let Some(end) = after.find(" }}") {
+            let name = after[..end].trim().trim_matches('"');
+            result.push_str(&format!("{{% block {name} %}}"));
+            rest = &after[end + 3..];
+        } else {
+            result.push_str(&rest[start..start + 10]);
+            rest = after;
+        }
+    }
+    result.push_str(rest);
+    output = result;
+
+    // Hugo pipes: | safeHTML → | safe
+    output = output.replace("| safeHTML", "| safe");
+    output = output.replace("| safeCSS", "| safe");
+    output = output.replace("| safeJS", "| safe");
+    output = output.replace("| safeURL", "| safe");
+
+    // Hugo functions
+    output = output.replace("{{ .RelPermalink }}", "{{ page.url }}");
+    output = output.replace("{{.RelPermalink}}", "{{ page.url }}");
+    output = output.replace("{{ .IsHome }}", "{% if page.slug == \"index\" %}");
+    output = output.replace("{{ .WordCount }}", "{{ content | word_count }}");
+    output = output.replace("{{ .ReadingTime }}", "{{ content | reading_time }}");
+    output = output.replace(
+        "{{ .TableOfContents }}",
+        "{% for entry in toc %}<a href=\"#{{ entry.id }}\">{{ entry.text }}</a>{% endfor %}",
+    );
+    output = output.replace("{{ .Description }}", "{{ page.extra.description }}");
+    output = output.replace("{{.Description}}", "{{ page.extra.description }}");
+    output = output.replace("{{ .Kind }}", "\"page\"");
+
+    // Hugo else if → Tera elif
+    output = output.replace("{{ else if ", "{% elif ");
+    output = output.replace("{{else if ", "{% elif ");
+    output = output.replace("{{ else }}", "{% else %}");
+    output = output.replace("{{else}}", "{% else %}");
+
+    // Detect remaining unconverted patterns
     for pattern in &[
-        "{{ with ",
-        "{{ block ",
-        "{{ define ",
-        "| safeHTML",
+        "resources.Get",
+        "resources.Concat",
+        "resources.Minify",
+        "resources.Fingerprint",
         "| markdownify",
+        ".Scratch",
+        "$.Scratch",
+        "dict ",
+        "slice ",
     ] {
         if output.contains(pattern) {
-            warnings.push(format!("Go template `{pattern}` needs manual conversion"));
+            warnings.push(format!("Hugo function `{pattern}` needs manual conversion"));
         }
     }
 
