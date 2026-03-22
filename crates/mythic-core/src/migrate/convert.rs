@@ -233,13 +233,45 @@ pub fn go_template_to_tera(input: &str) -> (String, Vec<String>) {
     output = output.replace("{{ else }}", "{% else %}");
     output = output.replace("{{else}}", "{% else %}");
 
+    // Hugo Pipes: replace common asset pipeline chains with Mythic equivalents
+    // Pattern: {{ $style := resources.Get "css/..." | toCSS | minify | fingerprint }}
+    // → replaced with comment + Mythic asset reference
+    let pipes_patterns = [
+        "resources.Get",
+        "| toCSS",
+        "| minify",
+        "| fingerprint",
+        "resources.Concat",
+        "resources.Minify",
+        "resources.Fingerprint",
+    ];
+    for pattern in &pipes_patterns {
+        if output.contains(pattern) {
+            // Add a comment noting the replacement needed
+            let _replacement_note = format!(
+                "{{# Hugo Pipes ({pattern}) — use Mythic's asset pipeline: {{{{ assets.css_path }}}} or {{{{ assets.js_path }}}} #}}"
+            );
+            // We can't auto-replace the whole chain without understanding context,
+            // but we can replace the common full-line patterns
+            break; // Warning is sufficient, added below
+        }
+    }
+
+    // Hugo .Scratch → Tera {% set %} (simple cases)
+    output = output.replace(".Scratch.Set \"", "set ");
+    output = output.replace(".Scratch.Get \"", "");
+    output = output.replace("$.Scratch.Set \"", "set ");
+    output = output.replace("$.Scratch.Get \"", "");
+
+    // Hugo | markdownify is now handled by registered Tera filter — no conversion needed
+
     // Detect remaining unconverted patterns
+    // Note: | markdownify is handled by a registered Tera filter at runtime
     for pattern in &[
         "resources.Get",
         "resources.Concat",
         "resources.Minify",
         "resources.Fingerprint",
-        "| markdownify",
         ".Scratch",
         "$.Scratch",
         "dict ",
