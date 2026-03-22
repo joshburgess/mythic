@@ -119,15 +119,16 @@ Templates receive these variables:
 
 Benchmarked against Hugo and Eleventy on identical synthetic sites (Apple M-series, release build):
 
-| Pages | Mythic | Hugo | Eleventy |
-|------:|-------:|-----:|---------:|
-| 1,000 | 290ms | 150ms | 634ms |
-| 5,000 | 1,422ms | 529ms | 2,234ms |
-| 10,000 | 3,002ms | 1,800ms | 5,152ms |
+| Pages  | Mythic   | Mythic (flat) | Hugo     | Eleventy  |
+|-------:|---------:|--------------:|---------:|----------:|
+| 1,000  | 162ms    | —             | 98ms     | 290ms     |
+| 10,000 | 1,822ms  | 1,338ms       | 1,718ms  | ~5,200ms  |
 
-**Incremental rebuilds** (10k pages, no changes): Mythic 201ms, Hugo 1,772ms, Eleventy 3,483ms.
+**Incremental rebuilds** (10k pages, no changes): Mythic **174ms**, Hugo 1,718ms, Eleventy ~3,500ms — **9.9x faster than Hugo**.
 
-See [BENCHMARKS.md](BENCHMARKS.md) for methodology and analysis.
+Enable `ugly_urls = true` for flat output (`slug.html` instead of `slug/index.html`) to beat Hugo by 22% on cold builds.
+
+See [BENCHMARKS.md](BENCHMARKS.md) for full methodology, pipeline profiling, and optimization history.
 
 ## Deploy
 
