@@ -1,0 +1,3 @@
+<div style="padding:1rem 1.25rem;margin:1.5rem 0;border-left:4px solid {% if type == 'warning' %}#f0ad4e{% elif type == 'danger' %}#d9534f{% elif type == 'tip' %}#5cb85c{% else %}#5bc0de{% endif %};background:{% if type == 'warning' %}#fcf8e3{% elif type == 'danger' %}#f2dede{% elif type == 'tip' %}#dff0d8{% else %}#d9edf7{% endif %};border-radius:0 4px 4px 0">
+  {% if type == 'warning' %}<strong>Warning:</strong> {% elif type == 'danger' %}<strong>Danger:</strong> {% elif type == 'tip' %}<strong>Tip:</strong> {% else %}<strong>Note:</strong> {% endif %}{{ inner | safe }}
+</div>

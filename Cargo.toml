@@ -13,6 +13,12 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+authors = ["Josh Burgess"]
+description = "A fast, batteries-included static site generator"
+repository = "https://github.com/joshburgess/mythic"
+homepage = "https://github.com/joshburgess/mythic"
+keywords = ["static-site-generator", "ssg", "blog", "website", "markdown"]
+categories = ["command-line-utilities", "web-programming"]
 
 [workspace.dependencies]
 anyhow = "1"
