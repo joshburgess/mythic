@@ -120,8 +120,16 @@ where
     // Write output files (incremental, parallelized)
     let t3 = Instant::now();
 
-    // Separate changed from unchanged
-    let mut to_write: Vec<&Page> = Vec::new();
+    // Pre-compute output paths and separate changed from unchanged.
+    // Each entry holds (page_ref, dir_path, file_path) to avoid
+    // redundant PathBuf joins later.
+    struct WriteJob<'a> {
+        page: &'a Page,
+        dir: std::path::PathBuf,
+        file: std::path::PathBuf,
+    }
+
+    let mut to_write: Vec<WriteJob> = Vec::new();
     let mut pages_unchanged = 0;
 
     for page in &pages {
@@ -131,28 +139,52 @@ where
         if !cache.is_changed(&page.slug, page.content_hash) {
             pages_unchanged += 1;
         } else {
-            to_write.push(page);
+            let dir = output_dir.join(&page.slug);
+            let file = dir.join("index.html");
+            to_write.push(WriteJob { page, dir, file });
         }
     }
 
-    // Pre-create output directories sequentially (avoids contention),
-    // then write files in parallel.
+    // Create directories using sorted single-mkdir approach.
+    // Sort by path so parents come before children, then use
+    // create_dir (single mkdir syscall) instead of create_dir_all
+    // (which does multiple stat calls per ancestor).
     {
-        let mut seen = std::collections::HashSet::with_capacity(to_write.len());
-        for page in &to_write {
-            let dir = output_dir.join(&page.slug);
-            if seen.insert(dir.clone()) {
-                std::fs::create_dir_all(&dir)?;
+        let mut dirs: Vec<&std::path::Path> = to_write.iter().map(|j| j.dir.as_path()).collect();
+        dirs.sort();
+        dirs.dedup();
+
+        // Ensure the output root exists first
+        std::fs::create_dir_all(&output_dir)?;
+
+        // Collect all unique ancestor directories, sorted by depth
+        let mut all_dirs = std::collections::BTreeSet::new();
+        for dir in &dirs {
+            let mut current = *dir;
+            while current != output_dir && current.starts_with(&output_dir) {
+                all_dirs.insert(current.to_path_buf());
+                match current.parent() {
+                    Some(p) => current = p,
+                    None => break,
+                }
             }
         }
+
+        // Create in sorted order (BTreeSet = lexicographic = parents before children).
+        // Use create_dir (not create_dir_all) — parent is guaranteed to exist
+        // from a previous iteration or from the output_dir root.
+        for dir in &all_dirs {
+            // create_dir returns Err if already exists, which is fine
+            let _ = std::fs::create_dir(dir);
+        }
     }
 
+    // Parallel file writes — directories already exist, paths pre-computed
     let write_errors: Vec<_> = to_write
         .par_iter()
-        .filter_map(|page| {
-            let html = page.rendered_html.as_ref().unwrap();
-            let dest = output_dir.join(&page.slug).join("index.html");
-            if let Err(e) = std::fs::write(&dest, html) {
+        .filter_map(|job| {
+            let html = job.page.rendered_html.as_ref().unwrap();
+            if let Err(e) = std::fs::write(&job.file, html) {
                 return Some(e.into());
             }
             None
@@ -166,8 +198,8 @@ where
     let pages_written = to_write.len();
 
     // Update cache for written pages
-    for page in &to_write {
-        cache.record(&page.slug, page.content_hash);
+    for job in &to_write {
+        cache.record(&job.page.slug, job.page.content_hash);
     }
     cache.save()?;
 

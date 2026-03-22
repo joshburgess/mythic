@@ -147,6 +147,7 @@ fn full_build(
     profile: bool,
 ) -> Result<()> {
     let output_dir = root.join(&site_config.output_dir);
+    let full_start = std::time::Instant::now();
 
     // --- Pre-build: load data, plugins ---
 
@@ -202,8 +203,9 @@ fn full_build(
             .unwrap_or(4),
     };
 
-    // Prepare shortcode dir
+    // Prepare shortcode dir — check existence once, not per-page
     let shortcode_dir = root.join("shortcodes");
+    let has_shortcodes = shortcode_dir.exists();
 
     // Build combined context for templates (assets + data)
     let assets_manifest = mythic_assets::process_assets(site_config, root)?;
@@ -248,13 +250,13 @@ fn full_build(
                 eprintln!("  Plugin error: {e}");
             }
 
-            // Process shortcodes before markdown rendering
+            // Process shortcodes and pre-render hooks
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
                     eprintln!("  Plugin pre_render error: {e}");
                 }
 
-                if shortcode_dir.exists() {
+                if has_shortcodes {
                     match mythic_markdown::shortcodes::process_shortcodes(
                         &page.raw_content,
                         &shortcode_dir,
@@ -288,9 +290,13 @@ fn full_build(
 
     // --- Post-build: taxonomies, feeds, sitemap ---
 
-    // Re-discover content for taxonomy/feed generation (need the rendered pages)
-    // We re-read because the build function consumed them. For taxonomies we
-    // only need the frontmatter data, not the rendered HTML.
+    // Post-build: only re-discover content if we need taxonomies, feeds, or sitemap
+    let needs_post_build = !site_config.taxonomies.is_empty()
+        || site_config.feed.is_some()
+        || site_config.sitemap.as_ref().map(|s| s.enabled).unwrap_or(true);
+
+    if needs_post_build {
+
     let all_pages = mythic_core::content::discover_content(site_config, root)?;
     let non_draft_pages: Vec<_> = all_pages
         .into_iter()
@@ -335,8 +341,14 @@ fn full_build(
     // Generate sitemap and robots.txt
     mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
 
+    } // end needs_post_build
+
     // Run post-build hooks
     plugin_manager.run_post_build(&report)?;
+
+    if profile {
+        println!("  Full pipeline: {}ms", full_start.elapsed().as_millis());
+    }
 
     Ok(())
 }
