@@ -255,8 +255,8 @@ mod tests {
             source_path: PathBuf::from("test.md"),
             slug: "test".to_string(),
             frontmatter: Frontmatter {
-                title: "Test Page".to_string(),
-                layout: Some(layout.to_string()),
+                title: "Test Page".into(),
+                layout: Some(layout.into()),
                 ..Default::default()
             },
             raw_content: String::new(),
@@ -354,14 +354,14 @@ mod tests {
             source_path: PathBuf::from("blog/my-post.md"),
             slug: "my-post".to_string(),
             frontmatter: Frontmatter {
-                title: "Full Page Title".to_string(),
-                date: Some("2025-06-15".to_string()),
+                title: "Full Page Title".into(),
+                date: Some("2025-06-15".into()),
                 draft: Some(false),
-                layout: Some(layout.to_string()),
+                layout: Some(layout.into()),
                 tags: Some(vec![
-                    "rust".to_string(),
-                    "web".to_string(),
-                    "ssg".to_string(),
+                    "rust".into(),
+                    "web".into(),
+                    "ssg".into(),
                 ]),
                 extra: None,
                 sitemap: Some(true),

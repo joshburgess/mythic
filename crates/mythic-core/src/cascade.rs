@@ -119,7 +119,7 @@ fn apply_to_frontmatter(fm: &mut crate::page::Frontmatter, key: &str, value: Val
         "layout" => {
             if fm.layout.as_deref() == Some("default") || fm.layout.is_none() {
                 if let Value::String(s) = value {
-                    fm.layout = Some(s);
+                    fm.layout = Some(s.into());
                 }
             }
         }
@@ -133,9 +133,9 @@ fn apply_to_frontmatter(fm: &mut crate::page::Frontmatter, key: &str, value: Val
         "tags" => {
             if fm.tags.is_none() {
                 if let Value::Array(arr) = value {
-                    let tags: Vec<String> = arr
+                    let tags: Vec<compact_str::CompactString> = arr
                         .into_iter()
-                        .filter_map(|v| v.as_str().map(String::from))
+                        .filter_map(|v| v.as_str().map(compact_str::CompactString::from))
                         .collect();
                     if !tags.is_empty() {
                         fm.tags = Some(tags);
@@ -155,14 +155,12 @@ fn apply_to_frontmatter(fm: &mut crate::page::Frontmatter, key: &str, value: Val
 mod tests {
     use super::*;
     use crate::page::{Frontmatter, Page};
-    use std::collections::HashMap;
-
     fn make_page(source: &Path, slug: &str) -> Page {
         Page {
             source_path: source.to_path_buf(),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: "Test".to_string(),
+                title: "Test".into(),
                 ..Default::default()
             },
             raw_content: String::new(),

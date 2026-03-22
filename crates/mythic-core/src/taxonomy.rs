@@ -60,9 +60,9 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
                 .entry(slug)
                 .or_default()
                 .push(TaxonomyPageRef {
-                    title: page.frontmatter.title.clone(),
+                    title: page.frontmatter.title.to_string(),
                     slug: page.slug.clone(),
-                    date: page.frontmatter.date.clone(),
+                    date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
                     url: format!("/{}/", page.slug),
                 });
         }
@@ -90,7 +90,7 @@ fn extract_taxonomy_values(fm: &Frontmatter, taxonomy_name: &str) -> Vec<String>
     // Check built-in "tags" field
     if taxonomy_name == "tags" {
         if let Some(ref tags) = fm.tags {
-            return tags.clone();
+            return tags.iter().map(|t| t.to_string()).collect();
         }
     }
 
@@ -143,8 +143,8 @@ pub fn generate_taxonomy_pages(taxonomies: &[Taxonomy]) -> Vec<Page> {
             source_path: PathBuf::from(format!("<taxonomy:{}>", taxonomy.config.name)),
             slug: listing_slug,
             frontmatter: Frontmatter {
-                title: taxonomy.config.name.clone(),
-                layout: Some("taxonomy_list".to_string()),
+                title: taxonomy.config.name.clone().into(),
+                layout: Some("taxonomy_list".into()),
                 ..Default::default()
             },
             raw_content: String::new(),
@@ -164,8 +164,8 @@ pub fn generate_taxonomy_pages(taxonomies: &[Taxonomy]) -> Vec<Page> {
                 )),
                 slug: term_slug,
                 frontmatter: Frontmatter {
-                    title: term.name.clone(),
-                    layout: Some("taxonomy_term".to_string()),
+                    title: term.name.clone().into(),
+                    layout: Some("taxonomy_term".into()),
                     ..Default::default()
                 },
                 raw_content: String::new(),
@@ -190,9 +190,9 @@ mod tests {
             source_path: PathBuf::from(format!("{slug}.md")),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: title.to_string(),
-                tags: Some(tags.into_iter().map(String::from).collect()),
-                date: date.map(String::from),
+                title: title.into(),
+                tags: Some(tags.into_iter().map(compact_str::CompactString::from).collect()),
+                date: date.map(compact_str::CompactString::from),
                 ..Default::default()
             },
             raw_content: String::new(),
@@ -302,7 +302,7 @@ mod tests {
                 source_path: PathBuf::from("no-tags.md"),
                 slug: "no-tags".to_string(),
                 frontmatter: Frontmatter {
-                    title: "No Tags".to_string(),
+                    title: "No Tags".into(),
                     ..Default::default()
                 },
                 raw_content: String::new(),
