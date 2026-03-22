@@ -237,6 +237,35 @@ mythic serve --production
 
 This serves the `public/` directory without watching or live reload, matching what users will see in production.
 
+## Other Useful Commands
+
+### mythic clean
+
+Remove the output directory and any build caches:
+
+```bash
+mythic clean
+```
+
+This is useful when you want to do a full rebuild from scratch, or if you encounter stale files in the output directory.
+
+### mythic list
+
+List all content pages detected by Mythic:
+
+```bash
+mythic list
+```
+
+Output:
+
+```
+  content/index.md            /
+  content/blog/first-post.md  /blog/first-post/
+```
+
+This helps verify that Mythic is picking up all your content files and generating the expected URL paths.
+
 ## Next Steps
 
 - Learn about the [Project Structure](/getting-started/project-structure/) in detail

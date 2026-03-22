@@ -297,3 +297,39 @@ Output Tera syntax literally without processing:
 ```
 
 This is useful for documentation or when embedding client-side template syntax.
+
+## Custom Filters
+
+In addition to the built-in Tera filters, Mythic provides several custom filters for common content operations:
+
+### reading_time
+
+Estimates the reading time for a block of content, assuming an average reading speed of 200 words per minute:
+
+```html
+{{ content | reading_time }}
+```
+
+Output: `3 min read`
+
+### word_count
+
+Returns the total number of words in the content:
+
+```html
+{{ content | word_count }}
+```
+
+Output: `342`
+
+### truncate_words
+
+Truncates content to a specified number of words and appends an ellipsis:
+
+```html
+{{ content | truncate_words(count=20) }}
+```
+
+Output: the first 20 words followed by `...`
+
+These filters work on any string value, so you can use them with page content, descriptions, or any other text variable.
