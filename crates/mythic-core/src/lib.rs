@@ -18,6 +18,8 @@ pub mod page;
 pub mod pagination;
 pub mod plugin;
 pub mod redirects;
+pub mod related;
+pub mod remote;
 pub mod rhai_plugin;
 pub mod search;
 pub mod sitemap;

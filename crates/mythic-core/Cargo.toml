@@ -18,6 +18,7 @@ rhai = { version = "1", features = ["sync"] }
 ahash = "0.8"
 lasso = { version = "0.7", features = ["multi-threaded"] }
 compact_str = { version = "0.8", features = ["serde"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 [dev-dependencies]
 tempfile = "3"

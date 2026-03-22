@@ -3,6 +3,7 @@
 
 pub mod frontmatter;
 pub mod highlight;
+pub mod hooks;
 pub mod render;
 pub mod shortcodes;
 pub mod toc;

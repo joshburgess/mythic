@@ -66,6 +66,9 @@ pub struct SiteConfig {
     /// Requires server-side URL rewriting for clean URLs.
     #[serde(default)]
     pub ugly_urls: bool,
+    /// Remote data sources fetched at build time.
+    #[serde(default)]
+    pub remote: Vec<crate::remote::RemoteSource>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -219,6 +222,7 @@ impl SiteConfig {
             templates: None,
             i18n: None,
             ugly_urls: false,
+            remote: Vec::new(),
         }
     }
 }
