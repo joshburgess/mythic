@@ -55,7 +55,7 @@ pub fn render_one(markdown: &str) -> String {
     let parser = Parser::new_ext(markdown, opts);
     let mut html_output = String::with_capacity(markdown.len() * 2);
     pulldown_cmark::html::push_html(&mut html_output, parser);
-    html_output
+    transform_admonitions(&html_output)
 }
 
 /// Render markdown with syntax highlighting for fenced code blocks.
@@ -110,7 +110,107 @@ fn render_one_highlighted(markdown: &str, highlighter: &Highlighter) -> String {
     }
 
     pulldown_cmark::html::push_html(&mut html_output, events.into_iter());
-    html_output
+    transform_admonitions(&html_output)
+}
+
+/// Transform blockquote-based admonitions (e.g. `> [!NOTE]`) into styled divs.
+///
+/// Recognises the callout types NOTE, WARNING, TIP, IMPORTANT, and CAUTION.
+/// A matching blockquote is replaced with:
+///
+/// ```html
+/// <div class="admonition admonition-note">
+/// <p class="admonition-title">Note</p>
+/// ...remaining content...
+/// </div>
+/// ```
+fn transform_admonitions(html: &str) -> String {
+    const TYPES: &[&str] = &["NOTE", "WARNING", "TIP", "IMPORTANT", "CAUTION"];
+
+    let mut result = String::with_capacity(html.len());
+    let mut remaining = html;
+
+    while let Some(bq_start) = remaining.find("<blockquote>") {
+        // Push everything before this blockquote.
+        result.push_str(&remaining[..bq_start]);
+
+        // Find the matching closing tag.
+        let after_open = &remaining[bq_start..];
+        let Some(close_pos) = after_open.find("</blockquote>") else {
+            // Malformed HTML — just push the rest and stop.
+            result.push_str(&remaining[bq_start..]);
+            remaining = "";
+            break;
+        };
+        let bq_inner_start = "<blockquote>".len();
+        let inner = &after_open[bq_inner_start..close_pos];
+        let after_close = &after_open[close_pos + "</blockquote>".len()..];
+
+        // Check if the inner content starts with a [!TYPE] marker.
+        // The marker is typically inside a <p> tag: <p>[!NOTE]\ncontent</p> or
+        // <p>[!NOTE]</p> followed by more content.
+        let trimmed = inner.trim_start();
+        let mut matched_type: Option<&str> = None;
+
+        for ty in TYPES {
+            let marker = format!("[!{}]", ty);
+            // Patterns to match:
+            // 1. <p>[!TYPE]\n  or  <p>[!TYPE]<br...  or <p>[!TYPE]</p>
+            if let Some(p_start) = trimmed.find("<p>") {
+                let after_p = &trimmed[p_start + 3..];
+                let after_p_trimmed = after_p.trim_start();
+                if after_p_trimmed.starts_with(&marker) {
+                    matched_type = Some(ty);
+                    break;
+                }
+            }
+        }
+
+        if let Some(ty) = matched_type {
+            let ty_lower = ty.to_lowercase();
+            // Capitalize first letter for the title.
+            let title = {
+                let mut chars = ty_lower.chars();
+                match chars.next() {
+                    Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+                    None => String::new(),
+                }
+            };
+
+            let marker = format!("[!{}]", ty);
+
+            // Remove the marker from the inner content.
+            // Find where the marker is and strip it.
+            let marker_pos = inner.find(&marker).unwrap();
+            let before_marker = &inner[..marker_pos];
+            let after_marker = &inner[marker_pos + marker.len()..];
+
+            // Clean up: if the marker was followed by a newline or <br>, remove it.
+            let after_marker = after_marker.strip_prefix('\n').unwrap_or(after_marker);
+
+            // Reconstruct the cleaned inner content.
+            let cleaned_inner = format!("{}{}", before_marker, after_marker);
+
+            // Check if the cleaned inner has an empty leading <p></p> and remove it.
+            let cleaned_inner = cleaned_inner.replace("<p>\n", "<p>").replace("<p></p>", "");
+
+            // Trim leading/trailing whitespace from the cleaned inner.
+            let cleaned_inner = cleaned_inner.trim();
+
+            result.push_str(&format!(
+                "<div class=\"admonition admonition-{}\">\n<p class=\"admonition-title\">{}</p>\n{}\n</div>",
+                ty_lower, title, cleaned_inner
+            ));
+        } else {
+            // Not an admonition, keep original blockquote.
+            result.push_str(&after_open[..close_pos + "</blockquote>".len()]);
+        }
+
+        remaining = after_close;
+    }
+
+    result.push_str(remaining);
+    result
 }
 
 fn escape_html(s: &str) -> String {
@@ -365,5 +465,45 @@ fn add(a: i32, b: i32) -> i32 { a + b }
                 assert_eq!(ta.level, tb.level);
             }
         }
+    }
+
+    #[test]
+    fn admonition_note_renders_as_div() {
+        let md = "> [!NOTE]\n> This is a note";
+        let html = render_one(md);
+        assert!(html.contains("class=\"admonition admonition-note\""));
+        assert!(html.contains("class=\"admonition-title\">Note</p>"));
+        assert!(html.contains("This is a note"));
+        // Should not contain blockquote
+        assert!(!html.contains("<blockquote>"));
+    }
+
+    #[test]
+    fn admonition_warning_gets_correct_class() {
+        let md = "> [!WARNING]\n> Be careful";
+        let html = render_one(md);
+        assert!(html.contains("class=\"admonition admonition-warning\""));
+        assert!(html.contains("class=\"admonition-title\">Warning</p>"));
+        assert!(html.contains("Be careful"));
+    }
+
+    #[test]
+    fn regular_blockquote_unchanged() {
+        let md = "> Just a normal blockquote";
+        let html = render_one(md);
+        assert!(html.contains("<blockquote>"));
+        assert!(!html.contains("admonition"));
+    }
+
+    #[test]
+    fn multiple_admonitions_in_same_document() {
+        let md = "> [!NOTE]\n> A note\n\n> [!TIP]\n> A tip\n\n> [!CAUTION]\n> Danger zone";
+        let html = render_one(md);
+        assert!(html.contains("admonition-note"));
+        assert!(html.contains("admonition-tip"));
+        assert!(html.contains("admonition-caution"));
+        assert!(html.contains("class=\"admonition-title\">Note</p>"));
+        assert!(html.contains("class=\"admonition-title\">Tip</p>"));
+        assert!(html.contains("class=\"admonition-title\">Caution</p>"));
     }
 }

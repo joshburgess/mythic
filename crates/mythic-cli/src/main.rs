@@ -325,6 +325,7 @@ fn load_config_with_validation(
             "templates",
             "i18n",
             "ugly_urls",
+            "remote",
         ];
         if !quiet {
             for key in table.keys() {
@@ -522,6 +523,14 @@ fn full_build(
 
     let data_dir = root.join(&site_config.data_dir);
     let mut site_data = mythic_core::data::load_data(&data_dir)?;
+
+    // Fetch remote data sources
+    if !site_config.remote.is_empty() {
+        let remote_data = mythic_core::remote::fetch_remote_data(&site_config.remote, &data_dir)?;
+        if let serde_json::Value::Object(ref mut map) = site_data {
+            map.insert("remote".to_string(), remote_data);
+        }
+    }
 
     // Pre-build content discovery for collections (available in templates)
     {
