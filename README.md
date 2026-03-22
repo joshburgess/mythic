@@ -12,7 +12,7 @@ A fast, batteries-included static site generator written in Rust.
 - **Shortcodes** - Custom reusable components as Tera templates with paired and self-closing syntax
 - **Data system** - YAML/TOML/JSON data files with Eleventy-style directory data cascade
 - **Taxonomies** - Tags, categories, and custom taxonomies with listing and term pages
-- **Atom feeds** - Site-wide and per-taxonomy feeds
+- **Atom + RSS feeds** - Site-wide and per-taxonomy feeds in both formats
 - **i18n** - Locale directories, hreflang tags, translation files
 - **Plugin system** - Rust trait-based hooks plus Rhai scripting for user plugins
 - **SEO tools** - Sitemap, robots.txt, link checker, heading hierarchy validation
@@ -54,10 +54,11 @@ Open http://localhost:3000 in your browser. Edit files and see changes instantly
 ```
 mythic init <name>              Create a new site (--template: blank, blog, docs, portfolio)
 mythic new <type> "Title"       Create a new content file (--draft)
-mythic build                    Build the site (--clean, --drafts, --profile)
+mythic build                    Build the site (--clean, --drafts, --profile, --quiet)
 mythic serve                    Dev server with live reload (--port, --open)
 mythic check                    Validate links, images, and heading hierarchy
 mythic migrate --from <ssg>     Import from jekyll, hugo, or eleventy
+mythic completions <shell>      Generate shell completions (bash, zsh, fish, powershell)
 mythic --version                Show version
 ```
 
