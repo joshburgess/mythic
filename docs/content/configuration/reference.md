@@ -113,6 +113,16 @@ Controls the build process and output.
 | `incremental`             | Boolean | `true`     | Enable incremental builds                           |
 | `ugly_urls`               | Boolean | `false`    | Use flat output mode (`page.html` instead of `page/index.html`) |
 
+### CLI Build Flags
+
+| Flag | Description |
+|------|-------------|
+| `--clean` | Delete output directory before building |
+| `--drafts` | Include draft pages |
+| `--profile` | Print per-stage timing breakdown |
+| `--quiet` | Suppress all output except errors |
+| `--json` | Output build report as JSON (for CI scripting) |
+
 ```toml
 [build]
 output = "dist"

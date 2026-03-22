@@ -597,3 +597,66 @@ fn list_shows_pages() {
     assert!(stdout.contains("index"));
     assert!(stdout.contains("pages"));
 }
+
+// ---------------------------------------------------------------------------
+// Content collections
+// ---------------------------------------------------------------------------
+
+#[test]
+fn content_collections_available_in_templates() {
+    let tmp = tempdir().unwrap();
+    let site = tmp.path().join("site");
+    std::fs::create_dir_all(site.join("content/posts")).unwrap();
+    std::fs::create_dir_all(site.join("templates")).unwrap();
+
+    std::fs::write(
+        site.join("mythic.toml"),
+        "title = \"Test\"\nbase_url = \"http://localhost\"\n",
+    )
+    .unwrap();
+
+    // Template that renders content collections
+    std::fs::write(
+        site.join("templates/default.html"),
+        "PAGES:{{ data.pages | length }}",
+    )
+    .unwrap();
+
+    std::fs::write(
+        site.join("content/index.md"),
+        "---\ntitle: Home\n---\nHello",
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("content/posts/one.md"),
+        "---\ntitle: Post One\ndate: \"2024-01-01\"\n---\nContent",
+    )
+    .unwrap();
+    std::fs::write(
+        site.join("content/posts/two.md"),
+        "---\ntitle: Post Two\ndate: \"2024-02-01\"\n---\nContent",
+    )
+    .unwrap();
+
+    let output = mythic_cmd()
+        .args([
+            "build",
+            "--config",
+            site.join("mythic.toml").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "Build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The index page should show the page count from data.pages
+    let html = std::fs::read_to_string(site.join("public/index/index.html")).unwrap();
+    assert!(
+        html.contains("PAGES:3"),
+        "Expected data.pages to have 3 entries, got: {html}"
+    );
+}

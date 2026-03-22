@@ -523,6 +523,60 @@ fn full_build(
     let data_dir = root.join(&site_config.data_dir);
     let mut site_data = mythic_core::data::load_data(&data_dir)?;
 
+    // Pre-build content discovery for collections (available in templates)
+    {
+        let pre_pages = mythic_core::content::discover_content(site_config, root)?;
+        let mut collections = serde_json::Map::new();
+
+        let all_pages_json: Vec<serde_json::Value> = pre_pages
+            .iter()
+            .filter(|p| !p.frontmatter.draft.unwrap_or(false) || drafts)
+            .map(|p| {
+                serde_json::json!({
+                    "title": p.frontmatter.title.as_str(),
+                    "slug": &p.slug,
+                    "url": format!("/{}/", p.slug),
+                    "date": p.frontmatter.date.as_deref(),
+                    "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+                })
+            })
+            .collect();
+        collections.insert(
+            "pages".to_string(),
+            serde_json::Value::Array(all_pages_json),
+        );
+
+        let mut sections: std::collections::HashMap<String, Vec<serde_json::Value>> =
+            std::collections::HashMap::new();
+        for p in &pre_pages {
+            if p.frontmatter.draft.unwrap_or(false) && !drafts {
+                continue;
+            }
+            let section = p.slug.split('/').next().unwrap_or("").to_string();
+            if !section.is_empty() && section != p.slug {
+                sections
+                    .entry(section)
+                    .or_default()
+                    .push(serde_json::json!({
+                        "title": p.frontmatter.title.as_str(),
+                        "slug": &p.slug,
+                        "url": format!("/{}/", p.slug),
+                        "date": p.frontmatter.date.as_deref(),
+                    }));
+            }
+        }
+        collections.insert(
+            "sections".to_string(),
+            serde_json::to_value(&sections).unwrap_or_default(),
+        );
+
+        if let serde_json::Value::Object(ref mut map) = site_data {
+            for (k, v) in collections {
+                map.insert(k, v);
+            }
+        }
+    }
+
     let mut plugin_manager = mythic_core::plugin::PluginManager::new();
     plugin_manager.register(Box::new(mythic_core::plugin::ReadingTimePlugin::new()));
 
@@ -673,52 +727,6 @@ fn full_build(
     // --- Post-build ---
 
     let non_draft_pages = built_pages;
-
-    // Build content collections for templates
-    let mut collections = serde_json::Map::new();
-    // All pages as array
-    let all_pages_json: Vec<serde_json::Value> = non_draft_pages.iter()
-        .map(|p| serde_json::json!({
-            "title": p.frontmatter.title.as_str(),
-            "slug": &p.slug,
-            "url": format!("/{}/", p.slug),
-            "date": p.frontmatter.date.as_deref(),
-            "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
-        }))
-        .collect();
-    collections.insert(
-        "pages".to_string(),
-        serde_json::Value::Array(all_pages_json),
-    );
-
-    // Group by section (first path segment)
-    let mut sections: std::collections::HashMap<String, Vec<serde_json::Value>> =
-        std::collections::HashMap::new();
-    for p in &non_draft_pages {
-        let section = p.slug.split('/').next().unwrap_or("").to_string();
-        if !section.is_empty() && section != p.slug {
-            sections
-                .entry(section)
-                .or_default()
-                .push(serde_json::json!({
-                    "title": p.frontmatter.title.as_str(),
-                    "slug": &p.slug,
-                    "url": format!("/{}/", p.slug),
-                    "date": p.frontmatter.date.as_deref(),
-                }));
-        }
-    }
-    collections.insert(
-        "sections".to_string(),
-        serde_json::to_value(&sections).unwrap_or_default(),
-    );
-
-    // Merge collections into site_data for template access via {{ data.pages }} and {{ data.sections }}
-    if let serde_json::Value::Object(ref mut map) = site_data {
-        for (k, v) in collections {
-            map.insert(k, v);
-        }
-    }
 
     // Detect duplicate slugs
     {
