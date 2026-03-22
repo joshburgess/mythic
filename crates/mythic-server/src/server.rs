@@ -29,6 +29,9 @@ pub enum ReloadMessage {
     /// Hot HTML content update — replace <main> content.
     #[serde(rename = "html-update")]
     HtmlUpdate { html: String },
+    /// Build error — display overlay in browser.
+    #[serde(rename = "error")]
+    Error { message: String },
 }
 
 struct AppState {
@@ -49,20 +52,25 @@ const LIVE_RELOAD_SCRIPT: &str = r#"<script>
       var msg;
       try { msg = JSON.parse(e.data); } catch(_) { location.reload(); return; }
       if (msg.type === 'reload') {
+        hideError();
         location.reload();
       } else if (msg.type === 'css-reload') {
+        hideError();
         var links = document.querySelectorAll('link[rel="stylesheet"]');
         links.forEach(function(l) {
           var href = l.getAttribute('href').split('?')[0];
           l.setAttribute('href', href + '?v=' + Date.now());
         });
       } else if (msg.type === 'html-update') {
+        hideError();
         var main = document.querySelector('main') || document.querySelector('article');
         if (main && msg.html) {
           morphContent(main, msg.html);
         } else {
           location.reload();
         }
+      } else if (msg.type === 'error') {
+        showError(msg.message);
       }
     };
     ws.onclose = function() {
@@ -101,6 +109,21 @@ const LIVE_RELOAD_SCRIPT: &str = r#"<script>
         reconcile(ec[i], ic[i]);
       }
     }
+  }
+  function showError(msg) {
+    var el = document.getElementById('__mythic-error');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '__mythic-error';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a1a2e;color:#ff6b6b;font-family:monospace;font-size:14px;padding:20px 24px;white-space:pre-wrap;border-bottom:3px solid #ff6b6b;max-height:40vh;overflow:auto;';
+      document.body.prepend(el);
+    }
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError() {
+    var el = document.getElementById('__mythic-error');
+    if (el) el.style.display = 'none';
   }
   connect();
 })();

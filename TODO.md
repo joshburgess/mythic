@@ -25,8 +25,8 @@
 
 ## Robustness
 
-- [ ] **Strip XML control characters in feeds** — the feed generator currently passes through invalid XML characters (`\x0B`, `\x00`, etc.). Strip characters outside the XML-valid range before writing feed output
-- [ ] **Graceful template errors in `serve`** — template syntax errors during dev server rebuild currently print a stack trace and continue. Show the error in the browser via the WebSocket live-reload channel instead
+- [x] **Strip XML control characters in feeds** — strip characters outside the XML 1.0 valid range before writing feed output
+- [x] **Graceful template errors in `serve`** — build errors during dev server rebuild are sent to the browser via WebSocket and displayed as a fixed error overlay
 - [ ] **Concurrent build safety** — audit all shared mutable state in the rayon parallel sections. The current code is safe (tested with Hugo regression test #3013) but has no formal proof or `loom` testing
 
 ## Performance (future)

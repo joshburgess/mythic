@@ -661,6 +661,14 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
                 }
                 Err(e) => {
                     eprintln!("  {} {e}", "Build error:".red().bold());
+                    // Send error to browser for display
+                    use mythic_server::server::{notify_reload, ReloadMessage};
+                    notify_reload(
+                        &rebuild_tx,
+                        ReloadMessage::Error {
+                            message: format!("{e:#}"),
+                        },
+                    );
                 }
             }
         }

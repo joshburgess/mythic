@@ -137,11 +137,27 @@ fn render_atom_feed(
 }
 
 fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
+    strip_xml_invalid(s)
+        .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+/// Strip characters that are invalid in XML 1.0.
+/// Valid: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+fn strip_xml_invalid(s: &str) -> String {
+    s.chars()
+        .filter(|&c| {
+            matches!(c,
+                '\u{09}' | '\u{0A}' | '\u{0D}' |
+                '\u{20}'..='\u{D7FF}' |
+                '\u{E000}'..='\u{FFFD}' |
+                '\u{10000}'..='\u{10FFFF}'
+            )
+        })
+        .collect()
 }
 
 fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
@@ -380,12 +396,8 @@ mod tests {
     // --- Hugo regression tests ---
 
     #[test]
-    fn feed_with_control_characters_does_not_panic() {
-        // Hugo #3268: XML control characters in content must not crash feed generation.
-        // NOTE: Currently the feed output still contains raw control chars, which
-        // produces technically invalid XML. A future fix should strip them in
-        // render_atom_feed or escape_xml. This test documents the current behavior
-        // and ensures the generation itself does not panic or error.
+    fn feed_strips_control_characters() {
+        // Hugo #3268: XML control characters in content must be stripped.
         let dir = tempfile::tempdir().unwrap();
         let config = feed_config();
         let mut p = page("Post with control", "ctrl", "2024-01-01", vec![]);
@@ -396,7 +408,9 @@ mod tests {
         let result = generate_feeds(&config, &pages, &taxonomies, dir.path());
         assert!(result.is_ok());
         let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
-        // The feed is generated and contains the entry
         assert!(feed.contains("Post with control"));
+        // Control characters must be stripped
+        assert!(!feed.contains('\x0B'), "Vertical tab should be stripped");
+        assert!(!feed.contains('\x00'), "Null byte should be stripped");
     }
 }
