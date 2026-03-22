@@ -220,3 +220,47 @@ Or use an HTML comment to break the syntax:
 ```markdown
 {<!-- -->{/* youtube(id="example") */}}
 ```
+
+## Built-in Shortcodes
+
+The `blog` starter template includes these shortcodes ready to use:
+
+### YouTube
+
+Responsive 16:9 video embed:
+
+```markdown
+{{% youtube id="dQw4w9WgXcQ" %}}
+```
+
+### Figure
+
+Image with optional caption:
+
+```markdown
+{{% figure src="photo.jpg" alt="A photo" caption="My caption" %}}
+```
+
+### Callout
+
+Styled callout box with types: `info` (default), `warning`, `danger`, `tip`:
+
+```markdown
+{{% callout type="warning" %}}Be careful with this setting.{{% /callout %}}
+```
+
+### Details
+
+Collapsible content:
+
+```markdown
+{{% details summary="Click to expand" %}}Hidden content here.{{% /details %}}
+```
+
+### GitHub
+
+Repository card with hover effect:
+
+```markdown
+{{% github repo="joshburgess/mythic" description="A fast SSG in Rust" %}}
+```

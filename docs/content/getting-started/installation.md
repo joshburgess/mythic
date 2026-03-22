@@ -128,6 +128,21 @@ mythic 0.8.0
 - **Disk:** ~30 MB for the binary
 - **Memory:** Varies by site size; a typical 1,000-page site uses ~100 MB during builds
 
+## Shell Completions
+
+Generate completions for your shell:
+
+```bash
+# Bash
+mythic completions bash > ~/.bash_completion.d/mythic
+
+# Zsh
+mythic completions zsh > ~/.zfunc/_mythic
+
+# Fish
+mythic completions fish > ~/.config/fish/completions/mythic.fish
+```
+
 ## Next Steps
 
 With Mythic installed, head to the [Quickstart](/getting-started/quickstart/) to create your first site.
