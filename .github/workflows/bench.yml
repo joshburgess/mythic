@@ -56,21 +56,21 @@ jobs:
         run: |
           echo "=== 1,000 Pages Cold Build ==="
           for i in 1 2 3 4 5; do
-            ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean 2>&1 | grep "Built"
+            ./target/release/mythic build --config /tmp/bench-1k/mythic.toml --clean 2>&1 | grep "Built"
           done
 
       - name: "Benchmark: 1k incremental (5 runs)"
         run: |
           echo "=== 1,000 Pages Incremental ==="
-          ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean > /dev/null 2>&1
+          ./target/release/mythic build --config /tmp/bench-1k/mythic.toml --clean > /dev/null 2>&1
           for i in 1 2 3 4 5; do
-            ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml 2>&1 | grep "Built"
+            ./target/release/mythic build --config /tmp/bench-1k/mythic.toml 2>&1 | grep "Built"
           done
 
       - name: "Benchmark: 1k profiled build"
         run: |
           echo "=== Pipeline Profile ==="
-          ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean --profile 2>&1
+          ./target/release/mythic build --config /tmp/bench-1k/mythic.toml --clean --profile 2>&1
 
       - name: Run Criterion benchmarks
         run: cargo bench -p mythic-core 2>&1 | grep -E "^(full_build|incremental|markdown)" || true
@@ -97,7 +97,7 @@ jobs:
           PAGES=1000
 
           # Mythic site
-          ./target/release/mythic-cli init /tmp/bench-mythic --template blank
+          ./target/release/mythic init /tmp/bench-mythic --template blank
           for i in $(seq 1 $PAGES); do
             m=$(printf '%02d' $(( (i % 12) + 1 )))
             d=$(printf '%02d' $(( (i % 28) + 1 )))
@@ -163,7 +163,7 @@ jobs:
         run: |
           echo "=== Mythic ==="
           for i in 1 2 3 4 5; do
-            ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml --clean 2>&1 | grep "Built"
+            ./target/release/mythic build --config /tmp/bench-mythic/mythic.toml --clean 2>&1 | grep "Built"
           done
           echo ""
           echo "=== Hugo ==="
@@ -174,7 +174,7 @@ jobs:
       - name: "Comparison: Incremental (5 runs each)"
         run: |
           echo "=== Mythic (incremental) ==="
-          ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml --clean > /dev/null 2>&1
+          ./target/release/mythic build --config /tmp/bench-mythic/mythic.toml --clean > /dev/null 2>&1
           for i in 1 2 3 4 5; do
-            ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml 2>&1 | grep "Built"
+            ./target/release/mythic build --config /tmp/bench-mythic/mythic.toml 2>&1 | grep "Built"
           done

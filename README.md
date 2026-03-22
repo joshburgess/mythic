@@ -16,6 +16,10 @@ A fast, batteries-included static site generator written in Rust.
 - **i18n** - Locale directories, hreflang tags, translation files
 - **Plugin system** - Rust trait-based hooks plus Rhai scripting for user plugins
 - **SEO tools** - Sitemap, robots.txt, link checker, heading hierarchy validation
+- **Search** - JSON search index generation for client-side search (Fuse.js, Lunr.js)
+- **Pagination** - Paginated taxonomy and listing pages with full paginator context
+- **Redirects** - Frontmatter `aliases` generate HTML redirect files with canonical links
+- **404 pages** - `content/404.md` automatically renders as `404.html` for static hosts
 - **Migration tools** - Import from Jekyll, Hugo, or Eleventy
 
 ## Install
@@ -49,10 +53,12 @@ Open http://localhost:3000 in your browser. Edit files and see changes instantly
 
 ```
 mythic init <name>              Create a new site (--template: blank, blog, docs, portfolio)
+mythic new <type> "Title"       Create a new content file (--draft)
 mythic build                    Build the site (--clean, --drafts, --profile)
 mythic serve                    Dev server with live reload (--port, --open)
 mythic check                    Validate links, images, and heading hierarchy
 mythic migrate --from <ssg>     Import from jekyll, hugo, or eleventy
+mythic --version                Show version
 ```
 
 ## Project Structure
@@ -111,6 +117,7 @@ Templates receive these variables:
 | `{{ site.title }}` | Site title from config |
 | `{{ site.base_url }}` | Base URL from config |
 | `{{ toc }}` | Table of contents entries |
+| `{{ data.paginator }}` | Pagination context (on taxonomy pages) |
 | `{{ assets.css_path }}` | Hashed CSS bundle path |
 | `{{ assets.js_path }}` | Hashed JS bundle path |
 | `{{ data }}` | Data from `_data/` files |

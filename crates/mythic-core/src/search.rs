@@ -140,10 +140,7 @@ mod tests {
         let mut draft = test_page("Draft", "draft", "Secret", vec![]);
         draft.frontmatter.draft = Some(true);
 
-        let pages = vec![
-            test_page("Public", "public", "Visible", vec![]),
-            draft,
-        ];
+        let pages = vec![test_page("Public", "public", "Visible", vec![]), draft];
 
         generate_search_index(&pages, dir.path(), "https://example.com").unwrap();
 

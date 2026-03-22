@@ -165,9 +165,7 @@ fn main() -> Result<()> {
 
 // --- Config loading with validation ---
 
-fn load_config_with_validation(
-    path: &Path,
-) -> Result<mythic_core::config::SiteConfig> {
+fn load_config_with_validation(path: &Path) -> Result<mythic_core::config::SiteConfig> {
     let config = mythic_core::config::load_config(path)?;
 
     // Validate: warn on common issues
@@ -244,11 +242,7 @@ fn print_build_summary(report: &mythic_core::build::BuildReport) {
     );
 
     if let Some(ref prof) = report.profile {
-        println!(
-            "\n  {} {}",
-            "Pipeline profile:".dimmed(),
-            ""
-        );
+        println!("\n  {} ", "Pipeline profile:".dimmed());
         println!("    Discovery:  {:>6}ms", prof.discovery_ms);
         println!("    Render:     {:>6}ms", prof.render_ms);
         println!("    Templates:  {:>6}ms", prof.template_ms);
@@ -257,10 +251,7 @@ fn print_build_summary(report: &mythic_core::build::BuildReport) {
 }
 
 fn print_check_report(report: &mythic_core::check::CheckReport) {
-    println!(
-        "\n{} results:",
-        "Check".cyan().bold()
-    );
+    println!("\n{} results:", "Check".cyan().bold());
     println!(
         "  Pages checked: {}",
         report.pages_checked.to_string().bold()
@@ -271,18 +262,9 @@ fn print_check_report(report: &mythic_core::check::CheckReport) {
     );
 
     if !report.errors.is_empty() {
-        println!(
-            "\n  {} ({}):",
-            "Errors".red().bold(),
-            report.errors.len()
-        );
+        println!("\n  {} ({}):", "Errors".red().bold(), report.errors.len());
         for e in &report.errors {
-            println!(
-                "    {} {} {}",
-                "x".red(),
-                e.file.dimmed(),
-                e.message
-            );
+            println!("    {} {} {}", "x".red(), e.file.dimmed(), e.message);
         }
     }
 
@@ -293,12 +275,7 @@ fn print_check_report(report: &mythic_core::check::CheckReport) {
             report.warnings.len()
         );
         for w in &report.warnings {
-            println!(
-                "    {} {} {}",
-                "!".yellow(),
-                w.file.dimmed(),
-                w.message
-            );
+            println!("    {} {} {}", "!".yellow(), w.file.dimmed(), w.message);
         }
     }
 
@@ -324,11 +301,7 @@ fn print_migration_report(report: &mythic_core::migrate::MigrationReport) {
     }
 
     if !report.errors.is_empty() {
-        println!(
-            "\n  {} ({}):",
-            "Errors".red().bold(),
-            report.errors.len()
-        );
+        println!("\n  {} ({}):", "Errors".red().bold(), report.errors.len());
         for e in &report.errors {
             println!("    {} {e}", "x".red());
         }
@@ -391,30 +364,19 @@ fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> 
     let file_path = dir.join(format!("{slug}.md"));
 
     if file_path.exists() {
-        anyhow::bail!(
-            "File already exists: {}",
-            file_path.display()
-        );
+        anyhow::bail!("File already exists: {}", file_path.display());
     }
 
     let date = chrono::Local::now().format("%Y-%m-%d").to_string();
     let draft_line = if draft { "\ndraft: true" } else { "" };
 
-    let content = format!(
-        "---\ntitle: \"{title}\"\ndate: \"{date}\"{draft_line}\n---\n\n"
-    );
+    let content = format!("---\ntitle: \"{title}\"\ndate: \"{date}\"{draft_line}\n---\n\n");
 
     std::fs::write(&file_path, content)?;
 
-    let rel = file_path
-        .strip_prefix(root)
-        .unwrap_or(&file_path);
+    let rel = file_path.strip_prefix(root).unwrap_or(&file_path);
 
-    println!(
-        "{} {}",
-        "Created".green().bold(),
-        rel.display()
-    );
+    println!("{} {}", "Created".green().bold(), rel.display());
     if draft {
         println!("  (marked as {})", "draft".yellow());
     }
@@ -526,11 +488,7 @@ fn full_build(
                         &shortcode_dir,
                     ) {
                         Ok(processed) => page.raw_content = processed,
-                        Err(e) => eprintln!(
-                            "  {} in {}: {e}",
-                            "shortcode error".red(),
-                            page.slug
-                        ),
+                        Err(e) => eprintln!("  {} in {}: {e}", "shortcode error".red(), page.slug),
                     }
                 }
             }
@@ -551,10 +509,9 @@ fn full_build(
             |page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
                 engine
                     .render_full(page, cfg, Some(&assets_value), Some(&site_data))
-                    .map_err(|e| {
+                    .inspect_err(|e| {
                         // Print friendly error, still propagate
-                        eprintln!("  {}", format_template_error(&e));
-                        e
+                        eprintln!("  {}", format_template_error(e));
                     })
             },
         ),
@@ -577,18 +534,21 @@ fn full_build(
     }
 
     // Generate redirect pages from aliases
-    let redirect_count =
-        mythic_core::redirects::generate_redirects(&non_draft_pages, &output_dir, &site_config.base_url)?;
+    let redirect_count = mythic_core::redirects::generate_redirects(
+        &non_draft_pages,
+        &output_dir,
+        &site_config.base_url,
+    )?;
     if redirect_count > 0 {
-        println!(
-            "  {} {} redirect(s)",
-            "Generated".dimmed(),
-            redirect_count
-        );
+        println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }
 
     // Generate search index
-    mythic_core::search::generate_search_index(&non_draft_pages, &output_dir, &site_config.base_url)?;
+    mythic_core::search::generate_search_index(
+        &non_draft_pages,
+        &output_dir,
+        &site_config.base_url,
+    )?;
 
     // Generate taxonomy pages with pagination
     if !site_config.taxonomies.is_empty() {
@@ -649,15 +609,17 @@ fn full_build(
                         extra_ctx.insert("paginator".to_string(), paginator_json);
                         let extra_value = serde_json::Value::Object(extra_ctx);
 
-                        match engine.render_full(&paged, site_config, Some(&assets_value), Some(&extra_value)) {
-                            Ok(html) => {
-                                let dest = output_dir.join(&slug).join("index.html");
-                                if let Some(parent) = dest.parent() {
-                                    std::fs::create_dir_all(parent)?;
-                                }
-                                std::fs::write(&dest, html)?;
+                        if let Ok(html) = engine.render_full(
+                            &paged,
+                            site_config,
+                            Some(&assets_value),
+                            Some(&extra_value),
+                        ) {
+                            let dest = output_dir.join(&slug).join("index.html");
+                            if let Some(parent) = dest.parent() {
+                                std::fs::create_dir_all(parent)?;
                             }
-                            Err(_) => {}
+                            std::fs::write(&dest, html)?;
                         }
                     }
                     continue; // Skip the non-paginated render below
@@ -665,24 +627,16 @@ fn full_build(
             }
 
             // Non-paginated page (listing pages, or terms without pagination)
-            match engine.render(&page, site_config) {
-                Ok(html) => {
-                    let dest = output_dir.join(&page.slug).join("index.html");
-                    if let Some(parent) = dest.parent() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                    std::fs::write(&dest, html)?;
+            if let Ok(html) = engine.render(&page, site_config) {
+                let dest = output_dir.join(&page.slug).join("index.html");
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent)?;
                 }
-                Err(_) => {}
+                std::fs::write(&dest, html)?;
             }
         }
 
-        mythic_core::feed::generate_feeds(
-            site_config,
-            &non_draft_pages,
-            &taxonomies,
-            &output_dir,
-        )?;
+        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &taxonomies, &output_dir)?;
     } else if site_config.feed.is_some() {
         mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
     }
@@ -723,10 +677,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     let rebuild_root = root.clone();
     std::thread::spawn(move || {
         while let Ok(event) = watcher.rx.recv() {
-            println!(
-                "  {} {event:?}",
-                "Change detected:".cyan()
-            );
+            println!("  {} {event:?}", "Change detected:".cyan());
 
             match full_build(&rebuild_config, &rebuild_root, drafts, false) {
                 Ok(_) => {
@@ -775,7 +726,11 @@ fn init_project(name: &str, template: &str) -> Result<()> {
     let starters_dir = find_starters_dir();
     let starter_path = starters_dir.as_ref().and_then(|d| {
         let p = d.join(template);
-        if p.exists() { Some(p) } else { None }
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
     });
 
     if let Some(starter) = starter_path {

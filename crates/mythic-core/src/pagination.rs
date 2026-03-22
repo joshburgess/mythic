@@ -48,7 +48,7 @@ pub fn paginate(
 
     let base_url = base_url.trim_end_matches('/');
     let total_items = pages.len();
-    let total_pages = (total_items + per_page - 1) / per_page;
+    let total_pages = total_items.div_ceil(per_page);
 
     let mut result = Vec::with_capacity(total_pages);
 
@@ -77,10 +77,7 @@ pub fn paginate(
         };
 
         let next_url = if page_num < total_pages {
-            Some(format!(
-                "{base_url}/{base_slug}/page/{}/",
-                page_num + 1
-            ))
+            Some(format!("{base_url}/{base_slug}/page/{}/", page_num + 1))
         } else {
             None
         };
@@ -157,10 +154,7 @@ mod tests {
 
         let (_, p2) = &result[1];
         assert_eq!(p2.pages.len(), 10);
-        assert_eq!(
-            p2.prev_url.as_deref(),
-            Some("https://example.com/blog/")
-        );
+        assert_eq!(p2.prev_url.as_deref(), Some("https://example.com/blog/"));
         assert_eq!(
             p2.next_url.as_deref(),
             Some("https://example.com/blog/page/3/")

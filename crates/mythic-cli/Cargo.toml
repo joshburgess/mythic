@@ -3,6 +3,10 @@ name = "mythic-cli"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "mythic"
+path = "src/main.rs"
+
 [dependencies]
 anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }

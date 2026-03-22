@@ -12,9 +12,9 @@ use tempfile::tempdir;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Return a `Command` pointing at the compiled `mythic-cli` binary.
+/// Return a `Command` pointing at the compiled `mythic` binary.
 fn mythic_cmd() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_mythic-cli"))
+    Command::new(env!("CARGO_BIN_EXE_mythic"))
 }
 
 /// Absolute path to the fixture site shipped with the repository.
