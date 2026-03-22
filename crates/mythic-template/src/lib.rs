@@ -911,4 +911,82 @@ mod tests {
         // Empty vec is falsy in Tera, so nav should not appear
         assert!(html.contains("<p>Hello world</p>"));
     }
+
+    // --- Custom filter tests ---
+
+    #[test]
+    fn reading_time_filter_works() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("rt.html"), "{{ content | reading_time }}").unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("rt");
+        // ~400 words → 2 min read
+        page.rendered_html = Some(vec!["word"; 400].join(" "));
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("2 min read"), "Got: {html}");
+    }
+
+    #[test]
+    fn reading_time_short_content() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("rt.html"), "{{ content | reading_time }}").unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("rt");
+        page.rendered_html = Some("short".to_string());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("1 min read"));
+    }
+
+    #[test]
+    fn word_count_filter_works() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("wc.html"), "{{ content | word_count }}").unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("wc");
+        page.rendered_html = Some("one two three four five".to_string());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains('5'), "Got: {html}");
+    }
+
+    #[test]
+    fn truncate_words_filter_works() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("tw.html"),
+            "{{ content | truncate_words(count=3) }}",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("tw");
+        page.rendered_html = Some("one two three four five six".to_string());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("one two three..."), "Got: {html}");
+        assert!(!html.contains("four"));
+    }
+
+    #[test]
+    fn truncate_words_short_content_no_ellipsis() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("tw.html"),
+            "{{ content | truncate_words(count=10) }}",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("tw");
+        page.rendered_html = Some("just three words".to_string());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert_eq!(html.trim(), "just three words");
+        assert!(!html.contains("..."));
+    }
 }

@@ -88,12 +88,15 @@ feed_limit = 50
 feed_filename = "feed.xml"
 ```
 
-Mythic generates both Atom (`feed.xml`) and RSS 2.0 (`rss.xml`) feeds automatically when feeds are enabled. Link to both in your template:
+Mythic generates Atom (`feed.xml`), RSS 2.0 (`rss.xml`), and JSON Feed 1.1 (`feed.json`) automatically when feeds are enabled. Link to all three in your template:
 
 ```html
 <link rel="alternate" type="application/atom+xml" href="/feed.xml">
 <link rel="alternate" type="application/rss+xml" href="/rss.xml">
+<link rel="alternate" type="application/feed+json" href="/feed.json">
 ```
+
+> **Note:** The `feed.json` file follows the [JSON Feed 1.1](https://jsonfeed.org/version/1.1) specification, providing a JSON-based alternative to XML feeds. Many modern feed readers support JSON Feed natively.
 
 ## [build]
 

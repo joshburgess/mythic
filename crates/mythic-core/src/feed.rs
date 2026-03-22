@@ -504,6 +504,110 @@ mod tests {
     // --- Hugo regression tests ---
 
     #[test]
+    fn rss_feed_has_valid_xml_structure() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![
+            page("Post A", "a", "2024-02-01", vec![]),
+            page("Post B", "b", "2024-01-15", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let rss = std::fs::read_to_string(dir.path().join("rss.xml")).unwrap();
+        assert!(rss.starts_with("<?xml version=\"1.0\" encoding=\"utf-8\"?>"));
+        assert!(rss.contains("<rss version=\"2.0\""));
+        assert!(rss.contains("<channel>"));
+        assert!(rss.contains("</channel>"));
+        assert!(rss.contains("</rss>"));
+        assert!(rss.contains("<item>"));
+        assert!(rss.contains("</item>"));
+        assert!(rss.contains("Post A"));
+        assert!(rss.contains("Post B"));
+    }
+
+    #[test]
+    fn json_feed_has_valid_json_and_correct_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![
+            page("Post A", "a", "2024-02-01", vec![]),
+            page("Post B", "b", "2024-01-15", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let json_str = std::fs::read_to_string(dir.path().join("feed.json")).unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_str).expect("feed.json must be valid JSON");
+        assert_eq!(
+            parsed["version"].as_str().unwrap(),
+            "https://jsonfeed.org/version/1.1",
+            "JSON Feed version must be 1.1"
+        );
+        assert_eq!(parsed["title"].as_str().unwrap(), "Test Feed");
+    }
+
+    #[test]
+    fn json_feed_has_correct_item_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![
+            page("Post A", "a", "2024-03-01", vec![]),
+            page("Post B", "b", "2024-02-01", vec![]),
+            page("Post C", "c", "2024-01-01", vec![]),
+        ];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let json_str = std::fs::read_to_string(dir.path().join("feed.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let items = parsed["items"].as_array().expect("items must be an array");
+        assert_eq!(items.len(), 3, "JSON Feed should contain exactly 3 items");
+    }
+
+    #[test]
+    fn rss_and_json_feeds_respect_entry_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = feed_config();
+        config.feed.as_mut().unwrap().entries = 3;
+
+        let pages: Vec<Page> = (0..7)
+            .map(|i| {
+                page(
+                    &format!("Post {i}"),
+                    &format!("p{i}"),
+                    &format!("2024-01-{:02}", i + 1),
+                    vec![],
+                )
+            })
+            .collect();
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        // RSS feed should have at most 3 items
+        let rss = std::fs::read_to_string(dir.path().join("rss.xml")).unwrap();
+        let rss_item_count = rss.matches("<item>").count();
+        assert_eq!(
+            rss_item_count, 3,
+            "RSS feed should respect entry limit of 3"
+        );
+
+        // JSON feed should have at most 3 items
+        let json_str = std::fs::read_to_string(dir.path().join("feed.json")).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let json_item_count = parsed["items"].as_array().unwrap().len();
+        assert_eq!(
+            json_item_count, 3,
+            "JSON Feed should respect entry limit of 3"
+        );
+    }
+
+    #[test]
     fn feed_strips_control_characters() {
         // Hugo #3268: XML control characters in content must be stripped.
         let dir = tempfile::tempdir().unwrap();
