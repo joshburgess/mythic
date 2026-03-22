@@ -667,6 +667,9 @@ fn full_build(
             // Extract content summaries (<!--more--> marker or auto-truncate)
             mythic_core::summary::extract_summaries(pages);
 
+            // Evaluate computed frontmatter fields (rhai: expressions)
+            mythic_core::computed::evaluate_computed_fields(pages);
+
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
                     eprintln!("  {} {e}", "plugin error:".red());
@@ -880,6 +883,13 @@ fn full_build(
     mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
 
     plugin_manager.run_post_build(&report)?;
+
+    // Compute content diff for minimal deployments
+    let diff = mythic_core::diff::compute_diff(&output_dir)?;
+    if !quiet && diff.total_changes() > 0 {
+        diff.print_summary();
+        mythic_core::diff::write_deploy_manifest(&output_dir, &diff)?;
+    }
 
     if profile && !quiet {
         println!(
