@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser)]
 #[command(
     name = "mythic",
+    version,
     about = "A fast static site generator written in Rust"
 )]
 struct Cli {
@@ -592,10 +593,78 @@ fn full_build(
     // Generate taxonomy pages with pagination
     if !site_config.taxonomies.is_empty() {
         let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
-        let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
 
+        // Render taxonomy listing pages
+        let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
         for mut page in taxonomy_pages {
             page.rendered_html = Some(String::new());
+
+            // For term pages, generate paginated versions
+            let is_term_page = page.frontmatter.layout.as_deref() == Some("taxonomy_term");
+            if is_term_page {
+                // Find the matching term to get its pages
+                let term_data = taxonomies.iter().find_map(|t| {
+                    t.terms.iter().find(|term| {
+                        let expected_slug = format!("{}/{}", t.config.slug, term.slug);
+                        page.slug == expected_slug
+                    })
+                });
+
+                if let Some(term) = term_data {
+                    // Create lightweight pages for pagination from term's page refs
+                    let term_pages: Vec<mythic_core::page::Page> = term
+                        .pages
+                        .iter()
+                        .map(|pr| mythic_core::page::Page {
+                            source_path: std::path::PathBuf::new(),
+                            slug: pr.slug.clone(),
+                            frontmatter: mythic_core::page::Frontmatter {
+                                title: pr.title.clone().into(),
+                                date: pr.date.as_ref().map(|d| d.clone().into()),
+                                ..Default::default()
+                            },
+                            raw_content: String::new(),
+                            rendered_html: None,
+                            output_path: None,
+                            content_hash: 0,
+                            toc: Vec::new(),
+                        })
+                        .collect();
+
+                    let paginated = mythic_core::pagination::paginate(
+                        &term_pages,
+                        10,
+                        &page.slug,
+                        &site_config.base_url,
+                    );
+
+                    for (page_num, paginator) in &paginated {
+                        let slug = mythic_core::pagination::paginated_slug(&page.slug, *page_num);
+                        let mut paged = page.clone();
+                        paged.slug = slug.clone();
+
+                        // Add paginator to template context via extra
+                        let paginator_json = serde_json::to_value(paginator).unwrap_or_default();
+                        let mut extra_ctx = serde_json::Map::new();
+                        extra_ctx.insert("paginator".to_string(), paginator_json);
+                        let extra_value = serde_json::Value::Object(extra_ctx);
+
+                        match engine.render_full(&paged, site_config, Some(&assets_value), Some(&extra_value)) {
+                            Ok(html) => {
+                                let dest = output_dir.join(&slug).join("index.html");
+                                if let Some(parent) = dest.parent() {
+                                    std::fs::create_dir_all(parent)?;
+                                }
+                                std::fs::write(&dest, html)?;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+                    continue; // Skip the non-paginated render below
+                }
+            }
+
+            // Non-paginated page (listing pages, or terms without pagination)
             match engine.render(&page, site_config) {
                 Ok(html) => {
                     let dest = output_dir.join(&page.slug).join("index.html");

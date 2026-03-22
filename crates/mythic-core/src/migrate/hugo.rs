@@ -241,7 +241,9 @@ fn migrate_shortcodes(source: &Path, output: &Path, report: &mut MigrationReport
             ));
         }
 
-        std::fs::write(out_shortcodes.join(path.file_name().unwrap()), converted)?;
+        if let Some(fname) = path.file_name() {
+            std::fs::write(out_shortcodes.join(fname), converted)?;
+        }
         report.files_converted += 1;
     }
 

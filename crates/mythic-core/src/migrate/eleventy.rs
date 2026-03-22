@@ -267,7 +267,10 @@ fn migrate_data(source: &Path, output: &Path, report: &mut MigrationReport) -> R
                     if name == parent_name {
                         // This is a directory data file — convert to _dir.yaml
                         let content = std::fs::read_to_string(path)?;
-                        let dir_target = target.parent().unwrap().join("_dir.yaml");
+                        let dir_target = target
+                            .parent()
+                            .unwrap_or_else(|| Path::new("."))
+                            .join("_dir.yaml");
                         if let Some(parent) = dir_target.parent() {
                             std::fs::create_dir_all(parent)?;
                         }
