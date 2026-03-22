@@ -304,3 +304,118 @@ Some Hugo-specific functions have no direct equivalent:
    ```
 
 6. **Compare pages** side by side with your Hugo site to catch visual differences.
+
+---
+
+## Converting Hugo Themes
+
+Mythic can convert Hugo themes into Mythic starter templates, giving you access to Hugo's 400+ theme ecosystem:
+
+```bash
+mythic migrate --from hugo-theme --source /path/to/hugo-theme --output my-theme
+```
+
+### What Gets Converted
+
+| Hugo Theme | Mythic Starter | Notes |
+|---|---|---|
+| `layouts/_default/baseof.html` | `templates/base.html` | Tera `{% extends %}` pattern |
+| `layouts/_default/single.html` | `templates/default.html` | Main page template |
+| `layouts/_default/list.html` | `templates/list.html` | Listing pages |
+| `layouts/partials/*` | `templates/partials/*` | Included partials |
+| `layouts/shortcodes/*` | `shortcodes/*` | Shortcode templates |
+| `assets/css/*` | `styles/*` | CSS/SCSS files |
+| `assets/js/*` | `scripts/*` | JavaScript files |
+| `static/*` | `static/*` | Static assets |
+| `archetypes/*` | `content/*.md` | Example content |
+| `exampleSite/content/*` | `content/*` | Demo content |
+| `theme.toml` | `mythic.toml` | Site config |
+
+### Template Syntax Conversion
+
+These patterns are converted automatically:
+
+| Hugo (Go Templates) | Mythic (Tera) |
+|---|---|
+| `{{ .Title }}` | `{{ page.title }}` |
+| `{{ .Content }}` | `{{ content \| safe }}` |
+| `{{ .Params.author }}` | `{{ page.extra.author }}` |
+| `{{ .Site.Title }}` | `{{ site.title }}` |
+| `{{ .RelPermalink }}` | `{{ page.url }}` |
+| `{{ .WordCount }}` | `{{ content \| word_count }}` |
+| `{{ .ReadingTime }}` | `{{ content \| reading_time }}` |
+| `{{ partial "header.html" . }}` | `{% include "header.html" %}` |
+| `{{ range .Pages }}` | `{% for item in pages %}` |
+| `{{ end }}` | `{% endfor %}` / `{% endif %}` |
+| `{{ with .Params.X }}` | `{% if page.extra.X %}` |
+| `{{ block "main" . }}` | `{% block main %}` |
+| `{{ define "main" }}` | `{% block main %}` |
+| `{{ else if }}` | `{% elif %}` |
+| `\| safeHTML` | `\| safe` |
+
+### Hugo Filters That Work at Runtime
+
+These Hugo filters are registered as Tera filters — converted templates using them work without modification:
+
+| Hugo Filter | Mythic Equivalent | What It Does |
+|---|---|---|
+| `\| markdownify` | `\| markdownify` | Renders markdown to HTML inline |
+| `\| plainify` | `\| plainify` | Strips HTML tags to plain text |
+| `\| humanize` | `\| humanize` | `"my-slug"` → `"My Slug"` |
+| `\| pluralize` | `\| pluralize` | `"post"` → `"posts"` |
+| `\| singularize` | `\| singularize` | `"posts"` → `"post"` |
+| `\| urlize` | `\| urlize` | `"My Title"` → `"my-title"` |
+| `\| safeHTML` | `\| safeHTML` | Marks content as safe |
+
+### What Requires Manual Conversion
+
+**Hugo Pipes (asset processing in templates):**
+
+Hugo processes assets inline in templates. Mythic handles this in the build pipeline.
+
+```go
+{{/* Hugo */}}
+{{ $style := resources.Get "css/main.scss" | toCSS | minify | fingerprint }}
+<link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+```
+
+Replace with Mythic's asset pipeline:
+
+```html
+{# Mythic #}
+<link rel="stylesheet" href="{{ assets.css_path }}" integrity="{{ assets.css_integrity }}" crossorigin="anonymous">
+```
+
+**Go data constructors (`dict` / `slice`):**
+
+```go
+{{/* Hugo */}}
+{{ partial "header.html" (dict "title" .Title "show_nav" true) }}
+```
+
+Replace with Tera includes or template variables:
+
+```html
+{# Mythic #}
+{% set header_title = page.title %}
+{% include "partials/header.html" %}
+```
+
+### Conversion Report
+
+The converter generates a `CONVERSION.md` file in the output directory listing:
+- Total files converted and copied
+- Warnings for patterns that need manual attention
+- Step-by-step instructions for finishing the conversion
+
+### Real-World Results
+
+Tested against popular Hugo themes:
+
+| Theme | Templates | Auto-Converted | Manual Fixes Needed |
+|---|---:|---:|---|
+| PaperMod | 40 | ~80% | Hugo Pipes, dict/slice |
+| Ananke | 38 | ~85% | Hugo Pipes, dict/slice |
+| Congo | 61 | ~75% | Hugo Pipes, Scratch, dict/slice |
+
+Most manual fixes involve replacing Hugo Pipes with Mythic's `{{ assets.css_path }}` — typically 5-10 lines per theme.

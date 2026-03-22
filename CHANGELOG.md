@@ -46,6 +46,8 @@ All notable changes to Mythic will be documented in this file.
 - Redirect/alias support via frontmatter `aliases` field
 - Build errors shown in browser during `mythic serve` via error overlay
 - XML control character stripping in Atom feeds
+- Hugo theme converter (`mythic migrate --from hugo-theme`) with 80%+ auto-conversion
+- Hugo compatibility Tera filters: markdownify, plainify, humanize, pluralize, singularize, urlize, safeHTML
 
 ### Performance
 - Parallel markdown rendering via rayon

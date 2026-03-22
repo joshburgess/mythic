@@ -70,7 +70,7 @@ mythic watch                    Watch for changes and rebuild without a server
 mythic check                    Validate links, images, and heading hierarchy
 mythic list                     List all content pages with dates and slugs (--drafts)
 mythic clean                    Delete the output directory
-mythic migrate --from <ssg>     Import from jekyll, hugo, or eleventy
+mythic migrate --from <ssg>     Import from jekyll, hugo, hugo-theme, or eleventy
 mythic completions <shell>      Generate shell completions (bash, zsh, fish, powershell)
 mythic --version                Show version
 ```
