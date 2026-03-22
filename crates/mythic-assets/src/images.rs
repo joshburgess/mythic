@@ -41,8 +41,7 @@ pub fn process_images(config: &SiteConfig, root: &Path) -> Result<ImageManifest>
         return Ok(ImageManifest::default());
     }
 
-    std::fs::create_dir_all(&output_base)
-        .context("Failed to create image output directory")?;
+    std::fs::create_dir_all(&output_base).context("Failed to create image output directory")?;
 
     let results: Vec<(String, Vec<GeneratedImage>)> = image_files
         .par_iter()
@@ -112,10 +111,7 @@ fn process_single_image(
     let mut variants = Vec::new();
 
     // Copy original
-    let orig_ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("jpg");
+    let orig_ext = path.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
     let orig_name = format!("{stem}-{hash_str}.{orig_ext}");
     let orig_dest = output_base.join(&orig_name);
     if !orig_dest.exists() {
@@ -174,10 +170,8 @@ pub fn picture_tag(
 
     let sizes_attr = sizes.unwrap_or("100vw");
 
-    let webp_sources: Vec<&GeneratedImage> = variants
-        .iter()
-        .filter(|v| v.format == "webp")
-        .collect();
+    let webp_sources: Vec<&GeneratedImage> =
+        variants.iter().filter(|v| v.format == "webp").collect();
 
     let original = variants
         .iter()
@@ -274,9 +268,21 @@ mod tests {
         manifest.images.insert(
             "photo.jpg".to_string(),
             vec![
-                GeneratedImage { path: "assets/img/photo-abc.jpg".to_string(), width: 1600, format: "jpg".to_string() },
-                GeneratedImage { path: "assets/img/photo-abc-800.webp".to_string(), width: 800, format: "webp".to_string() },
-                GeneratedImage { path: "assets/img/photo-abc.webp".to_string(), width: 1600, format: "webp".to_string() },
+                GeneratedImage {
+                    path: "assets/img/photo-abc.jpg".to_string(),
+                    width: 1600,
+                    format: "jpg".to_string(),
+                },
+                GeneratedImage {
+                    path: "assets/img/photo-abc-800.webp".to_string(),
+                    width: 800,
+                    format: "webp".to_string(),
+                },
+                GeneratedImage {
+                    path: "assets/img/photo-abc.webp".to_string(),
+                    width: 1600,
+                    format: "webp".to_string(),
+                },
             ],
         );
 

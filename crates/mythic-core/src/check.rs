@@ -84,12 +84,7 @@ fn discover_html_files(dir: &Path) -> Vec<std::path::PathBuf> {
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                == Some("html")
-        })
+        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("html"))
         .map(|e| e.path().to_path_buf())
         .collect()
 }
@@ -129,7 +124,9 @@ fn check_internal_links(
             output_dir.join(clean_link.trim_start_matches('/'))
         } else {
             // Relative link
-            let parent = std::path::Path::new(source_file).parent().unwrap_or(std::path::Path::new(""));
+            let parent = std::path::Path::new(source_file)
+                .parent()
+                .unwrap_or(std::path::Path::new(""));
             output_dir.join(parent).join(clean_link)
         };
 
@@ -247,9 +244,10 @@ mod tests {
     #[test]
     fn broken_internal_link_detected() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<a href="/missing/">Link</a>"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", r#"<a href="/missing/">Link</a>"#)],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(report.has_errors());
@@ -259,10 +257,13 @@ mod tests {
     #[test]
     fn valid_internal_link_passes() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<a href="/about/">Link</a>"#),
-            ("about/index.html", "<p>About page</p>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[
+                ("index.html", r#"<a href="/about/">Link</a>"#),
+                ("about/index.html", "<p>About page</p>"),
+            ],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -271,9 +272,13 @@ mod tests {
     #[test]
     fn missing_alt_text_warning() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<img src="photo.jpg"><img src="ok.jpg" alt="OK">"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                r#"<img src="photo.jpg"><img src="ok.jpg" alt="OK">"#,
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert_eq!(report.warnings.len(), 1);
@@ -283,20 +288,28 @@ mod tests {
     #[test]
     fn heading_skip_warning() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<h1>Title</h1><h3>Skipped h2</h3>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<h1>Title</h1><h3>Skipped h2</h3>")],
+        );
 
         let report = check_site(dir.path()).unwrap();
-        assert!(report.warnings.iter().any(|w| w.message.contains("h1 → h3")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("h1 → h3")));
     }
 
     #[test]
     fn external_links_skipped() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<a href="https://example.com">External</a>"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                r#"<a href="https://example.com">External</a>"#,
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -305,9 +318,10 @@ mod tests {
     #[test]
     fn proper_heading_hierarchy_ok() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<h1>A</h1><h2>B</h2><h3>C</h3><h2>D</h2>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<h1>A</h1><h2>B</h2><h3>C</h3><h2>D</h2>")],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(report.warnings.is_empty());
@@ -316,9 +330,13 @@ mod tests {
     #[test]
     fn anchor_links_not_flagged() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<a href=\"#section\">Jump</a><a href=\"#top\">Top</a>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                "<a href=\"#section\">Jump</a><a href=\"#top\">Top</a>",
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -327,9 +345,13 @@ mod tests {
     #[test]
     fn mailto_links_not_flagged() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<a href="mailto:user@example.com">Email</a>"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                r#"<a href="mailto:user@example.com">Email</a>"#,
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -338,9 +360,13 @@ mod tests {
     #[test]
     fn multiple_broken_links_in_same_file() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<a href="/gone1/">A</a><a href="/gone2/">B</a><a href="/gone3/">C</a>"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                r#"<a href="/gone1/">A</a><a href="/gone2/">B</a><a href="/gone3/">C</a>"#,
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert_eq!(report.errors.len(), 3);
@@ -350,10 +376,13 @@ mod tests {
     #[test]
     fn nested_output_directory_structure() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("blog/post/index.html", r#"<a href="/about/">Link</a>"#),
-            ("about/index.html", "<p>About</p>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[
+                ("blog/post/index.html", r#"<a href="/about/">Link</a>"#),
+                ("about/index.html", "<p>About</p>"),
+            ],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -363,9 +392,10 @@ mod tests {
     #[test]
     fn file_with_no_links_produces_no_errors() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<p>Just text, no links at all.</p>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<p>Just text, no links at all.</p>")],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
@@ -376,9 +406,13 @@ mod tests {
     #[test]
     fn image_with_alt_attribute_passes() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", r#"<img src="photo.jpg" alt="A photo"><img src="logo.png" alt="Logo">"#),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                r#"<img src="photo.jpg" alt="A photo"><img src="logo.png" alt="Logo">"#,
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         assert!(report.warnings.is_empty());
@@ -387,9 +421,10 @@ mod tests {
     #[test]
     fn multiple_heading_skips_in_same_file() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<h1>Title</h1><h3>Skip1</h3><h6>Skip2</h6>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<h1>Title</h1><h3>Skip1</h3><h6>Skip2</h6>")],
+        );
 
         let report = check_site(dir.path()).unwrap();
         // h1->h3 is a skip, h3->h6 is a skip
@@ -399,9 +434,13 @@ mod tests {
     #[test]
     fn valid_heading_going_back_up() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<h1>A</h1><h2>B</h2><h3>C</h3><h2>Back up</h2>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[(
+                "index.html",
+                "<h1>A</h1><h2>B</h2><h3>C</h3><h2>Back up</h2>",
+            )],
+        );
 
         let report = check_site(dir.path()).unwrap();
         // Going from h3 back to h2 is fine, no warnings
@@ -411,9 +450,10 @@ mod tests {
     #[test]
     fn tel_links_not_flagged() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<a href=\"tel:+1234567890\">Call</a>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<a href=\"tel:+1234567890\">Call</a>")],
+        );
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
     }
@@ -421,9 +461,10 @@ mod tests {
     #[test]
     fn javascript_links_not_flagged() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<a href=\"javascript:void(0)\">Click</a>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[("index.html", "<a href=\"javascript:void(0)\">Click</a>")],
+        );
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
     }
@@ -431,10 +472,13 @@ mod tests {
     #[test]
     fn link_with_query_string_resolved_correctly() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<a href=\"/about/?ref=nav\">About</a>"),
-            ("about/index.html", "<p>About</p>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[
+                ("index.html", "<a href=\"/about/?ref=nav\">About</a>"),
+                ("about/index.html", "<p>About</p>"),
+            ],
+        );
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
     }
@@ -442,10 +486,13 @@ mod tests {
     #[test]
     fn link_with_fragment_resolved_correctly() {
         let dir = tempfile::tempdir().unwrap();
-        setup_site(dir.path(), &[
-            ("index.html", "<a href=\"/about/#team\">Team</a>"),
-            ("about/index.html", "<p>About</p>"),
-        ]);
+        setup_site(
+            dir.path(),
+            &[
+                ("index.html", "<a href=\"/about/#team\">Team</a>"),
+                ("about/index.html", "<p>About</p>"),
+            ],
+        );
         let report = check_site(dir.path()).unwrap();
         assert!(!report.has_errors());
     }

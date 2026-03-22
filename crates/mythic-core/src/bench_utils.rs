@@ -3,21 +3,27 @@
 use std::path::Path;
 
 const WORDS: &[&str] = &[
-    "the", "be", "to", "of", "and", "a", "in", "that", "have", "I",
-    "it", "for", "not", "on", "with", "he", "as", "you", "do", "at",
-    "this", "but", "his", "by", "from", "they", "we", "say", "her", "she",
-    "or", "an", "will", "my", "one", "all", "would", "there", "their", "what",
-    "so", "up", "out", "if", "about", "who", "get", "which", "go", "me",
-    "when", "make", "can", "like", "time", "no", "just", "him", "know", "take",
-    "people", "into", "year", "your", "good", "some", "could", "them", "see", "other",
-    "than", "then", "now", "look", "only", "come", "its", "over", "think", "also",
-    "back", "after", "use", "two", "how", "our", "work", "first", "well", "way",
+    "the", "be", "to", "of", "and", "a", "in", "that", "have", "I", "it", "for", "not", "on",
+    "with", "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we", "say",
+    "her", "she", "or", "an", "will", "my", "one", "all", "would", "there", "their", "what", "so",
+    "up", "out", "if", "about", "who", "get", "which", "go", "me", "when", "make", "can", "like",
+    "time", "no", "just", "him", "know", "take", "people", "into", "year", "your", "good", "some",
+    "could", "them", "see", "other", "than", "then", "now", "look", "only", "come", "its", "over",
+    "think", "also", "back", "after", "use", "two", "how", "our", "work", "first", "well", "way",
     "even", "new", "want", "because", "any", "these", "give", "day", "most", "us",
 ];
 
 const TAGS: &[&str] = &[
-    "rust", "web", "programming", "tutorial", "guide", "performance",
-    "design", "architecture", "testing", "devops",
+    "rust",
+    "web",
+    "programming",
+    "tutorial",
+    "guide",
+    "performance",
+    "design",
+    "architecture",
+    "testing",
+    "devops",
 ];
 
 /// Generate a synthetic test site with the given number of pages.
@@ -38,7 +44,8 @@ pub fn generate_site(dir: &Path, num_pages: usize, seed: u64) {
     std::fs::write(
         dir.join("mythic.toml"),
         "title = \"Benchmark Site\"\nbase_url = \"http://localhost:3000\"\n",
-    ).unwrap();
+    )
+    .unwrap();
 
     // Generate pages
     let mut rng = SimpleRng::new(seed);

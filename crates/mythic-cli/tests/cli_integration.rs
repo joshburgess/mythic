@@ -158,7 +158,10 @@ fn build_with_config_flag_succeeds() {
 
     // The output directory should have been created with at least one file.
     let public = tmp.path().join("public");
-    assert!(public.is_dir(), "output dir 'public' should exist after build");
+    assert!(
+        public.is_dir(),
+        "output dir 'public' should exist after build"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -401,7 +404,10 @@ fn build_help_prints_usage() {
         .output()
         .expect("failed to run mythic build --help");
 
-    assert!(output.status.success(), "mythic build --help should succeed");
+    assert!(
+        output.status.success(),
+        "mythic build --help should succeed"
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
@@ -422,7 +428,10 @@ fn serve_help_prints_usage() {
         .output()
         .expect("failed to run mythic serve --help");
 
-    assert!(output.status.success(), "mythic serve --help should succeed");
+    assert!(
+        output.status.success(),
+        "mythic serve --help should succeed"
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

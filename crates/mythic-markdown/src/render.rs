@@ -94,11 +94,7 @@ fn render_one_highlighted(markdown: &str, highlighter: &Highlighter) -> String {
                 } else {
                     // Plain code block
                     events.push(Event::Html(
-                        format!(
-                            "<pre><code>{}</code></pre>",
-                            escape_html(&code_content)
-                        )
-                        .into(),
+                        format!("<pre><code>{}</code></pre>", escape_html(&code_content)).into(),
                     ));
                 }
                 continue;
@@ -130,7 +126,8 @@ mod tests {
 
     #[test]
     fn basic_markdown() {
-        let html = render_one("# Hello\n\nA **bold** paragraph with *italics*.\n\n- item 1\n- item 2");
+        let html =
+            render_one("# Hello\n\nA **bold** paragraph with *italics*.\n\n- item 1\n- item 2");
         assert!(html.contains("<h1>Hello</h1>"));
         assert!(html.contains("<strong>bold</strong>"));
         assert!(html.contains("<em>italics</em>"));
@@ -201,7 +198,11 @@ mod tests {
         assert_eq!(pages[0].toc.len(), 2);
         assert_eq!(pages[0].toc[0].text, "Section A");
         assert_eq!(pages[0].toc[1].text, "Section B");
-        assert!(pages[0].rendered_html.as_ref().unwrap().contains("id=\"section-a\""));
+        assert!(pages[0]
+            .rendered_html
+            .as_ref()
+            .unwrap()
+            .contains("id=\"section-a\""));
     }
 
     fn make_page(raw_content: &str) -> Page {
@@ -231,7 +232,8 @@ mod tests {
     #[test]
     fn multiple_code_blocks_different_languages() {
         let highlighter = Highlighter::new("base16-ocean.dark", false);
-        let md = "```rust\nfn main() {}\n```\n\nSome text\n\n```python\ndef hello():\n    pass\n```";
+        let md =
+            "```rust\nfn main() {}\n```\n\nSome text\n\n```python\ndef hello():\n    pass\n```";
         let html = render_one_highlighted(md, &highlighter);
         // Both code blocks should contain highlighted spans
         assert!(html.contains("main"));

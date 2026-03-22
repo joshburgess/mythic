@@ -145,8 +145,7 @@ pub fn write_hashed(js: &str, output_dir: &Path) -> Result<String> {
     let filename = format!("scripts-{hash}.js");
     let dest = output_dir.join(&filename);
     std::fs::create_dir_all(output_dir)?;
-    std::fs::write(&dest, js)
-        .with_context(|| format!("Failed to write: {}", dest.display()))?;
+    std::fs::write(&dest, js).with_context(|| format!("Failed to write: {}", dest.display()))?;
 
     Ok(filename)
 }

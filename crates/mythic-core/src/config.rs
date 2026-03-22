@@ -248,7 +248,11 @@ mod tests {
     #[test]
     fn missing_optional_fields_get_defaults() {
         let mut f = NamedTempFile::new().unwrap();
-        write!(f, "title = \"Minimal\"\nbase_url = \"http://example.com\"\n").unwrap();
+        write!(
+            f,
+            "title = \"Minimal\"\nbase_url = \"http://example.com\"\n"
+        )
+        .unwrap();
         let config = load_config(f.path()).unwrap();
         assert_eq!(config.content_dir, PathBuf::from("content"));
         assert_eq!(config.output_dir, PathBuf::from("public"));
@@ -328,7 +332,11 @@ mod tests {
     #[test]
     fn sass_config_parsed() {
         let mut f = NamedTempFile::new().unwrap();
-        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[sass]\nenabled = false\n").unwrap();
+        write!(
+            f,
+            "title = \"T\"\nbase_url = \"http://x.com\"\n\n[sass]\nenabled = false\n"
+        )
+        .unwrap();
         let config = load_config(f.path()).unwrap();
         assert!(!config.sass.unwrap().enabled);
     }

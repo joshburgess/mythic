@@ -54,11 +54,7 @@ fn generate_sitemap(
         }
 
         let url = format!("{base_url}/{}/", page.slug);
-        let lastmod = page
-            .frontmatter
-            .date
-            .as_deref()
-            .unwrap_or("2024-01-01");
+        let lastmod = page.frontmatter.date.as_deref().unwrap_or("2024-01-01");
 
         xml.push_str("  <url>\n");
         xml.push_str(&format!("    <loc>{url}</loc>\n"));
@@ -77,9 +73,7 @@ fn generate_sitemap(
 
 fn generate_robots_txt(config: &SiteConfig, output_dir: &Path) -> Result<()> {
     let base_url = config.base_url.trim_end_matches('/');
-    let content = format!(
-        "User-agent: *\nAllow: /\n\nSitemap: {base_url}/sitemap.xml\n"
-    );
+    let content = format!("User-agent: *\nAllow: /\n\nSitemap: {base_url}/sitemap.xml\n");
 
     std::fs::create_dir_all(output_dir)?;
     std::fs::write(output_dir.join("robots.txt"), content)?;
@@ -140,11 +134,7 @@ mod tests {
         let mut draft = test_page("draft", "2024-01-01");
         draft.frontmatter.draft = Some(true);
 
-        let pages = vec![
-            test_page("public", "2024-01-01"),
-            excluded,
-            draft,
-        ];
+        let pages = vec![test_page("public", "2024-01-01"), excluded, draft];
 
         generate(&config, &pages, dir.path()).unwrap();
 

@@ -116,10 +116,8 @@ where
     // Apply templates in parallel if provided
     let t2 = Instant::now();
     if let Some(ref tmpl_fn) = template_fn {
-        let results: Vec<Result<String>> = pages
-            .par_iter()
-            .map(|page| tmpl_fn(page, config))
-            .collect();
+        let results: Vec<Result<String>> =
+            pages.par_iter().map(|page| tmpl_fn(page, config)).collect();
 
         for (page, result) in pages.iter_mut().zip(results) {
             page.rendered_html = Some(result?);
@@ -278,7 +276,9 @@ mod tests {
     type NoTemplate = fn(&Page, &SiteConfig) -> Result<String>;
 
     fn do_build(config: &SiteConfig, root: &Path) -> BuildReport {
-        build(config, root, false, noop_render, None::<NoTemplate>).unwrap().0
+        build(config, root, false, noop_render, None::<NoTemplate>)
+            .unwrap()
+            .0
     }
 
     #[test]
@@ -354,7 +354,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(content.join("draft.md"), "---\ntitle: Draft\ndraft: true\n---\nDraft").unwrap();
+        std::fs::write(
+            content.join("draft.md"),
+            "---\ntitle: Draft\ndraft: true\n---\nDraft",
+        )
+        .unwrap();
         std::fs::write(content.join("pub.md"), "---\ntitle: Pub\n---\nPublished").unwrap();
 
         let report = do_build(&config, dir.path());
@@ -371,12 +375,21 @@ mod tests {
         std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
 
         let (report, _pages) = build_with_profile(
-            &config, dir.path(), false, noop_render, None::<NoTemplate>, true,
-        ).unwrap();
+            &config,
+            dir.path(),
+            false,
+            noop_render,
+            None::<NoTemplate>,
+            true,
+        )
+        .unwrap();
 
         assert!(report.profile.is_some());
         let prof = report.profile.unwrap();
-        assert!(prof.discovery_ms + prof.render_ms + prof.template_ms + prof.output_ms <= report.elapsed_ms + 1);
+        assert!(
+            prof.discovery_ms + prof.render_ms + prof.template_ms + prof.output_ms
+                <= report.elapsed_ms + 1
+        );
     }
 
     // --- Incremental build depth ---
@@ -475,9 +488,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(content.join("a.md"), "---\ntitle: Draft\ndraft: true\n---\nDraft").unwrap();
+        std::fs::write(
+            content.join("a.md"),
+            "---\ntitle: Draft\ndraft: true\n---\nDraft",
+        )
+        .unwrap();
 
-        let (report, _) = build(&config, dir.path(), true, noop_render, None::<NoTemplate>).unwrap();
+        let (report, _) =
+            build(&config, dir.path(), true, noop_render, None::<NoTemplate>).unwrap();
         assert_eq!(report.pages_skipped, 0);
         assert_eq!(report.pages_written, 1);
     }
@@ -490,12 +508,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(content.join("about.md"), "---\ntitle: About\n---\nAbout page").unwrap();
+        std::fs::write(
+            content.join("about.md"),
+            "---\ntitle: About\n---\nAbout page",
+        )
+        .unwrap();
 
         do_build(&config, dir.path());
 
         let output = dir.path().join("public/about/index.html");
-        assert!(output.exists(), "Expected clean URL: public/about/index.html");
+        assert!(
+            output.exists(),
+            "Expected clean URL: public/about/index.html"
+        );
         let html = std::fs::read_to_string(output).unwrap();
         assert!(html.contains("About page"));
     }
@@ -544,7 +569,10 @@ mod tests {
         std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nBody").unwrap();
 
         let tmpl_fn = |page: &Page, _cfg: &SiteConfig| -> Result<String> {
-            Ok(format!("<html><body>{}</body></html>", page.rendered_html.as_deref().unwrap_or("")))
+            Ok(format!(
+                "<html><body>{}</body></html>",
+                page.rendered_html.as_deref().unwrap_or("")
+            ))
         };
 
         build(&config, dir.path(), false, noop_render, Some(tmpl_fn)).unwrap();
@@ -570,7 +598,10 @@ mod tests {
 
         let result = build(&config, dir.path(), false, noop_render, Some(bad_tmpl));
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Template rendering failed"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Template rendering failed"));
     }
 
     // --- Hugo regression tests ---
@@ -586,15 +617,18 @@ mod tests {
             std::fs::write(
                 content.join(format!("page-{i}.md")),
                 format!("---\ntitle: Page {i}\n---\nContent {i}"),
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         // Build twice and compare outputs
-        let (report1, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (report1, _) =
+            build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
 
         // Clean and rebuild
         std::fs::remove_dir_all(dir.path().join("public")).unwrap();
-        let (report2, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (report2, _) =
+            build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
 
         assert_eq!(report1.total_pages, report2.total_pages);
         assert_eq!(report1.pages_written, report2.pages_written);
@@ -615,7 +649,10 @@ mod tests {
         std::fs::write(content.join("a.md"), "---\ntitle: Changed\n---\nBody").unwrap();
         let report = do_build(&config, dir.path());
         // The content hash should differ because the raw file changed
-        assert_eq!(report.pages_written, 1, "Frontmatter change should trigger rebuild");
+        assert_eq!(
+            report.pages_written, 1,
+            "Frontmatter change should trigger rebuild"
+        );
     }
 
     // --- ugly_urls (flat output) tests ---
@@ -627,7 +664,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        std::fs::write(content.join("about.md"), "---\ntitle: About\n---\nAbout page").unwrap();
+        std::fs::write(
+            content.join("about.md"),
+            "---\ntitle: About\n---\nAbout page",
+        )
+        .unwrap();
 
         build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
 

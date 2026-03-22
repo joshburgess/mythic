@@ -61,10 +61,7 @@ fn collect_dir_data(content_dir: &Path) -> Result<HashMap<PathBuf, Value>> {
         let path = entry.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-        let is_dir_data = matches!(
-            name,
-            "_dir.yaml" | "_dir.yml" | "_dir.toml" | "_dir.json"
-        );
+        let is_dir_data = matches!(name, "_dir.yaml" | "_dir.yml" | "_dir.toml" | "_dir.json");
         if !is_dir_data {
             continue;
         }
@@ -312,7 +309,11 @@ mod tests {
         std::fs::create_dir_all(&blog).unwrap();
         std::fs::create_dir_all(&docs).unwrap();
 
-        std::fs::write(blog.join("_dir.yaml"), "layout: blog-layout\nblog_only: true").unwrap();
+        std::fs::write(
+            blog.join("_dir.yaml"),
+            "layout: blog-layout\nblog_only: true",
+        )
+        .unwrap();
 
         let mut pages = vec![
             make_page(&blog.join("post.md"), "blog/post"),

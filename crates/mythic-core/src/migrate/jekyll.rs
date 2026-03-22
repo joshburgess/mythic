@@ -47,8 +47,8 @@ fn convert_config(source: &Path, output: &Path, report: &mut MigrationReport) ->
     }
 
     let content = std::fs::read_to_string(&config_path)?;
-    let yaml: serde_yaml::Value = serde_yaml::from_str(&content)
-        .context("Failed to parse _config.yml")?;
+    let yaml: serde_yaml::Value =
+        serde_yaml::from_str(&content).context("Failed to parse _config.yml")?;
 
     let title = yaml["title"].as_str().unwrap_or("Migrated Site");
     let base_url = yaml["url"]
@@ -103,7 +103,8 @@ fn migrate_posts(source: &Path, output: &Path, report: &mut MigrationReport) -> 
 
 fn parse_jekyll_filename(filename: &str) -> Option<(String, String)> {
     // Expected: YYYY-MM-DD-title.ext
-    let stem = filename.strip_suffix(".md")
+    let stem = filename
+        .strip_suffix(".md")
         .or_else(|| filename.strip_suffix(".markdown"))?;
 
     if stem.len() < 11 {
@@ -125,12 +126,12 @@ fn parse_jekyll_filename(filename: &str) -> Option<(String, String)> {
 }
 
 fn inject_date_if_missing(content: &str, date: &str) -> String {
-    if content.starts_with("---") {
-        if let Some(end) = content[3..].find("\n---") {
-            let frontmatter = &content[3..3 + end];
+    if let Some(after_open) = content.strip_prefix("---") {
+        if let Some(end) = after_open.find("\n---") {
+            let frontmatter = &after_open[..end];
             if !frontmatter.contains("date:") {
                 let new_fm = format!("{frontmatter}\ndate: \"{date}\"");
-                return format!("---\n{new_fm}\n---{}", &content[3 + end + 4..]);
+                return format!("---\n{new_fm}\n---{}", &after_open[end + 4..]);
             }
         }
     }
@@ -200,7 +201,22 @@ fn copy_static_assets(source: &Path, output: &Path, report: &mut MigrationReport
             copy_dir_if_exists(&src, &dest, report)?;
         } else if src.is_file() {
             let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
-            if matches!(ext, "css" | "js" | "png" | "jpg" | "jpeg" | "gif" | "svg" | "ico" | "webp" | "woff" | "woff2" | "ttf" | "eot") {
+            if matches!(
+                ext,
+                "css"
+                    | "js"
+                    | "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "svg"
+                    | "ico"
+                    | "webp"
+                    | "woff"
+                    | "woff2"
+                    | "ttf"
+                    | "eot"
+            ) {
                 std::fs::create_dir_all(dest.parent().unwrap())?;
                 std::fs::copy(&src, &dest)?;
                 report.files_copied += 1;
@@ -216,10 +232,7 @@ fn copy_dir_if_exists(src: &Path, dest: &Path, report: &mut MigrationReport) -> 
         return Ok(());
     }
 
-    for entry in WalkDir::new(src)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new(src).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         let rel = path.strip_prefix(src).unwrap_or(path);
         let target = dest.join(rel);
@@ -250,7 +263,8 @@ mod tests {
         std::fs::write(
             src.path().join("_config.yml"),
             "title: My Blog\nurl: https://example.com\ndescription: A test blog",
-        ).unwrap();
+        )
+        .unwrap();
 
         let report = migrate(src.path(), out.path()).unwrap();
         assert!(report.files_converted > 0);
@@ -272,7 +286,8 @@ mod tests {
         std::fs::write(
             posts.join("2024-01-15-my-first-post.md"),
             "---\ntitle: My First Post\n---\n# Hello\n\nContent here.",
-        ).unwrap();
+        )
+        .unwrap();
 
         let report = migrate(src.path(), out.path()).unwrap();
         assert!(report.files_converted >= 2); // config + post
@@ -295,13 +310,12 @@ mod tests {
         std::fs::write(
             layouts.join("default.html"),
             "<html><body>{{ content }}</body></html>",
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
-        let template = std::fs::read_to_string(
-            out.path().join("templates/default.html"),
-        ).unwrap();
+        let template = std::fs::read_to_string(out.path().join("templates/default.html")).unwrap();
         assert!(template.contains("{{ content | safe }}"));
     }
 

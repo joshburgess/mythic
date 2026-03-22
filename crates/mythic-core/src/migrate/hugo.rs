@@ -75,27 +75,39 @@ fn convert_config_file(
 
     let (title, base_url) = match format {
         ConfigFormat::Toml => {
-            let val: toml::Value = toml::from_str(&content)
-                .context("Failed to parse Hugo TOML config")?;
+            let val: toml::Value =
+                toml::from_str(&content).context("Failed to parse Hugo TOML config")?;
             (
-                val.get("title").and_then(|v| v.as_str()).unwrap_or("Migrated Site").to_string(),
-                val.get("baseURL").and_then(|v| v.as_str()).unwrap_or("http://localhost:3000").to_string(),
+                val.get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Migrated Site")
+                    .to_string(),
+                val.get("baseURL")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("http://localhost:3000")
+                    .to_string(),
             )
         }
         ConfigFormat::Yaml => {
-            let val: serde_yaml::Value = serde_yaml::from_str(&content)
-                .context("Failed to parse Hugo YAML config")?;
+            let val: serde_yaml::Value =
+                serde_yaml::from_str(&content).context("Failed to parse Hugo YAML config")?;
             (
                 val["title"].as_str().unwrap_or("Migrated Site").to_string(),
-                val["baseURL"].as_str().unwrap_or("http://localhost:3000").to_string(),
+                val["baseURL"]
+                    .as_str()
+                    .unwrap_or("http://localhost:3000")
+                    .to_string(),
             )
         }
         ConfigFormat::Json => {
-            let val: serde_json::Value = serde_json::from_str(&content)
-                .context("Failed to parse Hugo JSON config")?;
+            let val: serde_json::Value =
+                serde_json::from_str(&content).context("Failed to parse Hugo JSON config")?;
             (
                 val["title"].as_str().unwrap_or("Migrated Site").to_string(),
-                val["baseURL"].as_str().unwrap_or("http://localhost:3000").to_string(),
+                val["baseURL"]
+                    .as_str()
+                    .unwrap_or("http://localhost:3000")
+                    .to_string(),
             )
         }
     };
@@ -223,7 +235,10 @@ fn migrate_shortcodes(source: &Path, output: &Path, report: &mut MigrationReport
         let converted = converted.replace("{{.Inner}}", "{{ inner }}");
 
         for w in warnings {
-            report.warn(format!("shortcodes/{}: {w}", path.file_name().unwrap_or_default().to_string_lossy()));
+            report.warn(format!(
+                "shortcodes/{}: {w}",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            ));
         }
 
         std::fs::write(out_shortcodes.join(path.file_name().unwrap()), converted)?;
@@ -269,7 +284,8 @@ mod tests {
         std::fs::write(
             src.path().join("config.toml"),
             "title = \"Hugo Site\"\nbaseURL = \"https://example.com\"",
-        ).unwrap();
+        )
+        .unwrap();
 
         let report = migrate(src.path(), out.path()).unwrap();
         assert!(report.files_converted > 0);
@@ -287,7 +303,8 @@ mod tests {
         std::fs::write(
             src.path().join("config.yaml"),
             "title: Hugo YAML Site\nbaseURL: https://yaml.example.com",
-        ).unwrap();
+        )
+        .unwrap();
 
         let report = migrate(src.path(), out.path()).unwrap();
         let config = std::fs::read_to_string(out.path().join("mythic.toml")).unwrap();
@@ -305,7 +322,8 @@ mod tests {
         std::fs::write(
             content.join("hello.md"),
             "---\ntitle: Hello\n---\n# Hello World",
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
@@ -324,7 +342,8 @@ mod tests {
         std::fs::write(
             layouts.join("baseof.html"),
             "<html><body>{{ .Content }}</body></html>",
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
@@ -343,11 +362,13 @@ mod tests {
         std::fs::write(
             sc.join("youtube.html"),
             "<iframe src=\"https://youtube.com/embed/{{ .Get \"id\" }}\"></iframe>",
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
-        let shortcode = std::fs::read_to_string(out.path().join("shortcodes/youtube.html")).unwrap();
+        let shortcode =
+            std::fs::read_to_string(out.path().join("shortcodes/youtube.html")).unwrap();
         assert!(shortcode.contains("{{ id"));
         assert!(!shortcode.contains(".Get"));
     }

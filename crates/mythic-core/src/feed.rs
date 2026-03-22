@@ -47,9 +47,7 @@ pub fn generate_feeds(
         for term in &taxonomy.terms {
             let term_pages: Vec<&Page> = pages
                 .iter()
-                .filter(|p| {
-                    term.pages.iter().any(|tp| tp.slug == p.slug)
-                })
+                .filter(|p| term.pages.iter().any(|tp| tp.slug == p.slug))
                 .collect();
 
             if term_pages.is_empty() {
@@ -69,9 +67,7 @@ pub fn generate_feeds(
                 &config.base_url,
             );
 
-            let term_dir = output_dir
-                .join(&taxonomy.config.slug)
-                .join(&term.slug);
+            let term_dir = output_dir.join(&taxonomy.config.slug).join(&term.slug);
             std::fs::create_dir_all(&term_dir)?;
             std::fs::write(term_dir.join("feed.xml"), &feed_xml)?;
         }
@@ -103,20 +99,14 @@ fn render_atom_feed(
     ));
     xml.push_str(&format!("  <link href=\"{base_url}/\"/>\n"));
     xml.push_str(&format!("  <updated>{updated_rfc}</updated>\n"));
-    xml.push_str(&format!(
-        "  <id>{base_url}/</id>\n"
-    ));
+    xml.push_str(&format!("  <id>{base_url}/</id>\n"));
     xml.push_str("  <author>\n");
     xml.push_str(&format!("    <name>{}</name>\n", escape_xml(author)));
     xml.push_str("  </author>\n");
 
     for page in pages {
         let page_url = format!("{base_url}/{}/", page.slug);
-        let date = page
-            .frontmatter
-            .date
-            .as_deref()
-            .unwrap_or("1970-01-01");
+        let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
         let date_rfc = format!("{date}T00:00:00Z");
 
         let summary = page
@@ -197,7 +187,11 @@ mod tests {
                 tags: if tags.is_empty() {
                     None
                 } else {
-                    Some(tags.into_iter().map(compact_str::CompactString::from).collect())
+                    Some(
+                        tags.into_iter()
+                            .map(compact_str::CompactString::from)
+                            .collect(),
+                    )
                 },
                 ..Default::default()
             },
@@ -247,9 +241,7 @@ mod tests {
     fn taxonomy_feed_generated() {
         let dir = tempfile::tempdir().unwrap();
         let config = feed_config();
-        let pages = vec![
-            page("Rust Post", "rust-post", "2024-02-01", vec!["rust"]),
-        ];
+        let pages = vec![page("Rust Post", "rust-post", "2024-02-01", vec!["rust"])];
         let taxonomies = build_taxonomies(&config, &pages);
 
         generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
@@ -267,7 +259,14 @@ mod tests {
         config.feed.as_mut().unwrap().entries = 2;
 
         let pages: Vec<Page> = (0..5)
-            .map(|i| page(&format!("Post {i}"), &format!("p{i}"), &format!("2024-01-{:02}", i + 1), vec![]))
+            .map(|i| {
+                page(
+                    &format!("Post {i}"),
+                    &format!("p{i}"),
+                    &format!("2024-01-{:02}", i + 1),
+                    vec![],
+                )
+            })
             .collect();
         let taxonomies = build_taxonomies(&config, &pages);
 
@@ -330,9 +329,12 @@ mod tests {
     fn xml_special_characters_in_titles_are_escaped() {
         let dir = tempfile::tempdir().unwrap();
         let config = feed_config();
-        let pages = vec![
-            page("Tom & Jerry <3 \"Quotes\"", "special", "2024-01-01", vec![]),
-        ];
+        let pages = vec![page(
+            "Tom & Jerry <3 \"Quotes\"",
+            "special",
+            "2024-01-01",
+            vec![],
+        )];
         let taxonomies = build_taxonomies(&config, &pages);
 
         generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
@@ -348,9 +350,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut config = feed_config();
         config.base_url = "https://mysite.org".to_string();
-        let pages = vec![
-            page("Post", "blog/hello", "2024-05-01", vec![]),
-        ];
+        let pages = vec![page("Post", "blog/hello", "2024-05-01", vec![])];
         let taxonomies = build_taxonomies(&config, &pages);
 
         generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();

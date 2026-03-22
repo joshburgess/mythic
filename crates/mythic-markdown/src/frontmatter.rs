@@ -51,8 +51,7 @@ fn parse_toml_frontmatter(raw: &str) -> Result<(Frontmatter, String)> {
         String::new()
     };
 
-    let fm: Frontmatter =
-        toml::from_str(toml_str).context("Failed to parse TOML frontmatter")?;
+    let fm: Frontmatter = toml::from_str(toml_str).context("Failed to parse TOML frontmatter")?;
     Ok((fm, body))
 }
 
@@ -147,7 +146,8 @@ mod tests {
 
     #[test]
     fn body_preserves_content() {
-        let input = "---\ntitle: Test\n---\n\n# Heading\n\nParagraph with **bold**.\n\n- list item\n";
+        let input =
+            "---\ntitle: Test\n---\n\n# Heading\n\nParagraph with **bold**.\n\n- list item\n";
         let (_, body) = parse_frontmatter(input).unwrap();
         assert!(body.contains("# Heading"));
         assert!(body.contains("**bold**"));
@@ -231,7 +231,11 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         // Error should mention frontmatter, not be a cryptic panic
-        assert!(err.to_lowercase().contains("frontmatter") || err.contains("---") || err.contains("+++"));
+        assert!(
+            err.to_lowercase().contains("frontmatter")
+                || err.contains("---")
+                || err.contains("+++")
+        );
     }
 
     #[test]
@@ -284,7 +288,8 @@ mod tests {
     #[test]
     fn yaml_and_toml_produce_same_result() {
         // Hugo #768: same data in YAML vs TOML should produce identical frontmatter
-        let yaml_input = "---\ntitle: Same\ndate: \"2024-06-15\"\ndraft: false\ntags:\n  - a\n  - b\n---\nBody";
+        let yaml_input =
+            "---\ntitle: Same\ndate: \"2024-06-15\"\ndraft: false\ntags:\n  - a\n  - b\n---\nBody";
         let toml_input = "+++\ntitle = \"Same\"\ndate = \"2024-06-15\"\ndraft = false\ntags = [\"a\", \"b\"]\n+++\nBody";
 
         let (yaml_fm, yaml_body) = parse_frontmatter(yaml_input).unwrap();

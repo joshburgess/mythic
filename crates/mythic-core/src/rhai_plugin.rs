@@ -19,11 +19,7 @@ impl RhaiPlugin {
     pub fn from_file(path: &Path) -> Result<Self> {
         let engine = Engine::new();
         let ast = engine.compile_file(path.into()).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to compile Rhai script {}: {}",
-                path.display(),
-                e
-            )
+            anyhow::anyhow!("Failed to compile Rhai script {}: {}", path.display(), e)
         })?;
 
         let script_name = path
@@ -46,19 +42,43 @@ impl Plugin for RhaiPlugin {
     }
 
     fn on_page_discovered(&self, page: &mut Page) -> Result<()> {
-        run_hook(&self.engine, &self.ast, "on_page_discovered", page, &self.script_name)
+        run_hook(
+            &self.engine,
+            &self.ast,
+            "on_page_discovered",
+            page,
+            &self.script_name,
+        )
     }
 
     fn on_pre_render(&self, page: &mut Page) -> Result<()> {
-        run_hook(&self.engine, &self.ast, "on_pre_render", page, &self.script_name)
+        run_hook(
+            &self.engine,
+            &self.ast,
+            "on_pre_render",
+            page,
+            &self.script_name,
+        )
     }
 
     fn on_post_render(&self, page: &mut Page) -> Result<()> {
-        run_hook(&self.engine, &self.ast, "on_post_render", page, &self.script_name)
+        run_hook(
+            &self.engine,
+            &self.ast,
+            "on_post_render",
+            page,
+            &self.script_name,
+        )
     }
 }
 
-fn run_hook(engine: &Engine, ast: &AST, hook_name: &str, page: &mut Page, script_name: &str) -> Result<()> {
+fn run_hook(
+    engine: &Engine,
+    ast: &AST,
+    hook_name: &str,
+    page: &mut Page,
+    script_name: &str,
+) -> Result<()> {
     // Check if the function exists in the script
     let has_fn = ast.iter_functions().any(|f| f.name == hook_name);
     if !has_fn {
@@ -67,12 +87,12 @@ fn run_hook(engine: &Engine, ast: &AST, hook_name: &str, page: &mut Page, script
 
     // Prepare page data as a Rhai map
     let mut page_map = rhai::Map::new();
-    page_map.insert("title".into(), Dynamic::from(page.frontmatter.title.clone()));
-    page_map.insert("slug".into(), Dynamic::from(page.slug.clone()));
     page_map.insert(
-        "content".into(),
-        Dynamic::from(page.raw_content.clone()),
+        "title".into(),
+        Dynamic::from(page.frontmatter.title.clone()),
     );
+    page_map.insert("slug".into(), Dynamic::from(page.slug.clone()));
+    page_map.insert("content".into(), Dynamic::from(page.raw_content.clone()));
 
     if let Some(ref date) = page.frontmatter.date {
         page_map.insert("date".into(), Dynamic::from(date.clone()));
@@ -90,16 +110,12 @@ fn run_hook(engine: &Engine, ast: &AST, hook_name: &str, page: &mut Page, script
     // Call the hook function with page_map as argument
     let result: Dynamic = engine
         .call_fn(&mut Scope::new(), ast, hook_name, (page_map,))
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Rhai plugin '{script_name}' error in {hook_name}: {e}"
-            )
-        })?;
+        .map_err(|e| anyhow::anyhow!("Rhai plugin '{script_name}' error in {hook_name}: {e}"))?;
 
     // The function should return the modified page map
     if let Some(updated) = result.try_cast::<rhai::Map>() {
         if let Some(title) = updated.get("title") {
-            if let Some(s) = title.clone().into_string().ok() {
+            if let Ok(s) = title.clone().into_string() {
                 page.frontmatter.title = s.into();
             }
         }
@@ -151,15 +167,15 @@ fn json_to_dynamic(v: &serde_json::Value) -> Dynamic {
 fn dynamic_to_json(v: &Dynamic) -> serde_json::Value {
     if v.is_unit() {
         serde_json::Value::Null
-    } else if let Some(b) = v.as_bool().ok() {
+    } else if let Ok(b) = v.as_bool() {
         serde_json::Value::Bool(b)
-    } else if let Some(i) = v.as_int().ok() {
+    } else if let Ok(i) = v.as_int() {
         serde_json::Value::Number(serde_json::Number::from(i))
-    } else if let Some(f) = v.as_float().ok() {
+    } else if let Ok(f) = v.as_float() {
         serde_json::Number::from_f64(f)
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null)
-    } else if let Some(s) = v.clone().into_string().ok() {
+    } else if let Ok(s) = v.clone().into_string() {
         serde_json::Value::String(s)
     } else if let Some(arr) = v.clone().try_cast::<Vec<Dynamic>>() {
         serde_json::Value::Array(arr.iter().map(dynamic_to_json).collect())

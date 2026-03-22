@@ -71,10 +71,7 @@ pub struct TranslationLink {
 }
 
 /// Process pages for i18n: detect locales, adjust slugs, find translations.
-pub fn process_i18n(
-    pages: &mut [Page],
-    config: &I18nConfig,
-) {
+pub fn process_i18n(pages: &mut [Page], config: &I18nConfig) {
     // Detect locale from directory structure or frontmatter
     for page in pages.iter_mut() {
         let locale = detect_locale(page, config);
@@ -83,10 +80,15 @@ pub fn process_i18n(
 
     // Adjust slugs for non-default locales
     for page in pages.iter_mut() {
-        let locale = page.frontmatter.locale.as_deref().unwrap_or(&config.default_locale);
+        let locale = page
+            .frontmatter
+            .locale
+            .as_deref()
+            .unwrap_or(&config.default_locale);
         if locale != config.default_locale {
             // Strip locale prefix from slug if it came from directory structure
-            let stripped = page.slug
+            let stripped = page
+                .slug
                 .strip_prefix(&format!("{locale}/"))
                 .unwrap_or(&page.slug)
                 .to_string();
@@ -115,8 +117,16 @@ fn detect_locale(page: &Page, config: &I18nConfig) -> String {
 }
 
 /// Find translation links for a page (other locale versions of the same content).
-pub fn find_translations(page: &Page, all_pages: &[Page], config: &I18nConfig) -> Vec<TranslationLink> {
-    let current_locale = page.frontmatter.locale.as_deref().unwrap_or(&config.default_locale);
+pub fn find_translations(
+    page: &Page,
+    all_pages: &[Page],
+    config: &I18nConfig,
+) -> Vec<TranslationLink> {
+    let current_locale = page
+        .frontmatter
+        .locale
+        .as_deref()
+        .unwrap_or(&config.default_locale);
 
     // Get the "base" slug (without locale prefix)
     let base_slug = strip_locale_prefix(&page.slug, config);
@@ -124,7 +134,11 @@ pub fn find_translations(page: &Page, all_pages: &[Page], config: &I18nConfig) -
     let mut translations = Vec::new();
 
     for other in all_pages {
-        let other_locale = other.frontmatter.locale.as_deref().unwrap_or(&config.default_locale);
+        let other_locale = other
+            .frontmatter
+            .locale
+            .as_deref()
+            .unwrap_or(&config.default_locale);
         if other_locale == current_locale {
             continue;
         }
@@ -158,7 +172,11 @@ pub fn generate_hreflang_tags(
     base_url: &str,
 ) -> String {
     let translations = find_translations(page, all_pages, config);
-    let current_locale = page.frontmatter.locale.as_deref().unwrap_or(&config.default_locale);
+    let current_locale = page
+        .frontmatter
+        .locale
+        .as_deref()
+        .unwrap_or(&config.default_locale);
     let base_url = base_url.trim_end_matches('/');
 
     let mut tags = String::new();
@@ -249,18 +267,29 @@ mod tests {
         std::fs::write(
             i18n_dir.join("en.yaml"),
             "nav:\n  home: Home\n  about: About",
-        ).unwrap();
+        )
+        .unwrap();
         std::fs::write(
             i18n_dir.join("es.yaml"),
             "nav:\n  home: Inicio\n  about: Acerca de",
-        ).unwrap();
+        )
+        .unwrap();
 
         let config = test_i18n_config();
         let translations = Translations::load(dir.path(), &config).unwrap();
 
-        assert_eq!(translations.translate("en", "nav.home"), Some("Home".to_string()));
-        assert_eq!(translations.translate("es", "nav.home"), Some("Inicio".to_string()));
-        assert_eq!(translations.translate("es", "nav.about"), Some("Acerca de".to_string()));
+        assert_eq!(
+            translations.translate("en", "nav.home"),
+            Some("Home".to_string())
+        );
+        assert_eq!(
+            translations.translate("es", "nav.home"),
+            Some("Inicio".to_string())
+        );
+        assert_eq!(
+            translations.translate("es", "nav.about"),
+            Some("Acerca de".to_string())
+        );
         assert_eq!(translations.translate("en", "missing.key"), None);
     }
 
@@ -282,9 +311,7 @@ mod tests {
     #[test]
     fn frontmatter_locale_detection() {
         let config = test_i18n_config();
-        let mut pages = vec![
-            page_with_locale("special-page", Some("es")),
-        ];
+        let mut pages = vec![page_with_locale("special-page", Some("es"))];
 
         process_i18n(&mut pages, &config);
         assert_eq!(pages[0].frontmatter.locale.as_deref(), Some("es"));
@@ -311,9 +338,7 @@ mod tests {
     #[test]
     fn default_locale_pages_keep_original_slug() {
         let config = test_i18n_config();
-        let mut pages = vec![
-            page_with_locale("about", Some("en")),
-        ];
+        let mut pages = vec![page_with_locale("about", Some("en"))];
 
         process_i18n(&mut pages, &config);
 
@@ -324,9 +349,7 @@ mod tests {
     #[test]
     fn pages_without_locale_get_default() {
         let config = test_i18n_config();
-        let mut pages = vec![
-            page_with_locale("contact", None),
-        ];
+        let mut pages = vec![page_with_locale("contact", None)];
 
         process_i18n(&mut pages, &config);
 

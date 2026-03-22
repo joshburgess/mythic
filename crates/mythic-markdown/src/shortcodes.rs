@@ -179,11 +179,11 @@ fn parse_shortcode_tag(tag: &str) -> (String, HashMap<String, String>) {
         let key = remaining[..eq_pos].trim();
         let after_eq = remaining[eq_pos + 1..].trim();
 
-        if after_eq.starts_with('"') {
-            if let Some(close_quote) = after_eq[1..].find('"') {
-                let value = &after_eq[1..1 + close_quote];
+        if let Some(after_quote) = after_eq.strip_prefix('"') {
+            if let Some(close_quote) = after_quote.find('"') {
+                let value = &after_quote[..close_quote];
                 args.insert(key.to_string(), value.to_string());
-                remaining = &after_eq[1 + close_quote + 1..];
+                remaining = &after_quote[close_quote + 1..];
                 continue;
             }
         }
@@ -269,7 +269,10 @@ mod tests {
 
         let input = r#"{{% note %}}{{% bold %}}Important{{% /bold %}}{{% /note %}}"#;
         let result = process_with_engine(input, &tera).unwrap();
-        assert!(result.contains("<strong>Important</strong>"), "Got: {result}");
+        assert!(
+            result.contains("<strong>Important</strong>"),
+            "Got: {result}"
+        );
         assert!(result.contains("class=\"note\""));
     }
 
@@ -291,10 +294,7 @@ mod tests {
 
     #[test]
     fn multiple_self_closing_shortcodes() {
-        let tera = setup_tera(&[(
-            "img.html",
-            r#"<img src="{{ src }}" alt="{{ alt }}">"#,
-        )]);
+        let tera = setup_tera(&[("img.html", r#"<img src="{{ src }}" alt="{{ alt }}">"#)]);
 
         let input = r#"Before {{% img src="a.jpg" alt="A" %}} middle {{% img src="b.jpg" alt="B" %}} after"#;
         let result = process_with_engine(input, &tera).unwrap();
@@ -334,10 +334,7 @@ mod tests {
 
     #[test]
     fn shortcode_surrounded_by_markdown() {
-        let tera = setup_tera(&[(
-            "hr.html",
-            "<hr class=\"fancy\">",
-        )]);
+        let tera = setup_tera(&[("hr.html", "<hr class=\"fancy\">")]);
 
         let input = "# Heading\n\nParagraph before.\n\n{{% hr %}}\n\nParagraph after.";
         let result = process_with_engine(input, &tera).unwrap();
@@ -362,14 +359,23 @@ mod tests {
         let input = "```\n{{% youtube id=\"abc\" %}}\n```";
         let result = process_with_engine(input, &tera).unwrap();
         // Shortcode syntax should be preserved inside code block
-        assert!(result.contains("{{% youtube"), "Shortcode inside code block should not be expanded, got: {result}");
-        assert!(!result.contains("<iframe>"), "Shortcode template should NOT be rendered inside code block");
+        assert!(
+            result.contains("{{% youtube"),
+            "Shortcode inside code block should not be expanded, got: {result}"
+        );
+        assert!(
+            !result.contains("<iframe>"),
+            "Shortcode template should NOT be rendered inside code block"
+        );
     }
 
     #[test]
     fn shortcode_with_empty_body_renders() {
         // Zola issue #2564: empty body shortcodes should still render
-        let tera = setup_tera(&[("wrapper.html", "<div class=\"wrap\">{{ inner | safe }}</div>")]);
+        let tera = setup_tera(&[(
+            "wrapper.html",
+            "<div class=\"wrap\">{{ inner | safe }}</div>",
+        )]);
         let input = "{{% wrapper %}}{{% /wrapper %}}";
         let result = process_with_engine(input, &tera).unwrap();
         assert!(result.contains("class=\"wrap\""));

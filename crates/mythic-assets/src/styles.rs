@@ -64,21 +64,19 @@ pub fn minify_css(css: &str) -> String {
         }
 
         // Strip block comments
-        if c == '/' {
-            if chars.peek() == Some(&'*') {
-                chars.next();
-                loop {
-                    match chars.next() {
-                        Some('*') if chars.peek() == Some(&'/') => {
-                            chars.next();
-                            break;
-                        }
-                        None => break,
-                        _ => {}
+        if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            loop {
+                match chars.next() {
+                    Some('*') if chars.peek() == Some(&'/') => {
+                        chars.next();
+                        break;
                     }
+                    None => break,
+                    _ => {}
                 }
-                continue;
             }
+            continue;
         }
 
         // Collapse whitespace
@@ -114,8 +112,7 @@ pub fn write_hashed(css: &str, output_dir: &Path) -> Result<String> {
     let filename = format!("styles-{hash}.css");
     let dest = output_dir.join(&filename);
     std::fs::create_dir_all(output_dir)?;
-    std::fs::write(&dest, css)
-        .with_context(|| format!("Failed to write: {}", dest.display()))?;
+    std::fs::write(&dest, css).with_context(|| format!("Failed to write: {}", dest.display()))?;
 
     Ok(filename)
 }
