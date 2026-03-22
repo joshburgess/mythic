@@ -488,3 +488,112 @@ fn migrate_jekyll_runs_with_temp_dirs() {
         "migrated output directory should exist",
     );
 }
+
+// ---------------------------------------------------------------------------
+// JSON output
+// ---------------------------------------------------------------------------
+
+#[test]
+fn build_json_outputs_valid_json() {
+    let tmp = tempdir().unwrap();
+    let site = tmp.path().join("site");
+    mythic_cmd()
+        .args(["init", site.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    let output = mythic_cmd()
+        .args([
+            "build",
+            "--config",
+            site.join("mythic.toml").to_str().unwrap(),
+            "--json",
+            "--quiet",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("--json output must be valid JSON");
+    assert!(parsed["total_pages"].is_number());
+    assert!(parsed["pages_written"].is_number());
+    assert!(parsed["elapsed_ms"].is_number());
+}
+
+// ---------------------------------------------------------------------------
+// Watch command (just verify it starts without error)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn watch_help_prints_usage() {
+    let output = mythic_cmd().args(["watch", "--help"]).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--config"));
+    assert!(stdout.contains("--drafts"));
+}
+
+// ---------------------------------------------------------------------------
+// Clean command
+// ---------------------------------------------------------------------------
+
+#[test]
+fn clean_removes_output() {
+    let tmp = tempdir().unwrap();
+    let site = tmp.path().join("site");
+    mythic_cmd()
+        .args(["init", site.to_str().unwrap()])
+        .output()
+        .unwrap();
+    mythic_cmd()
+        .args([
+            "build",
+            "--config",
+            site.join("mythic.toml").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(site.join("public").exists());
+
+    let output = mythic_cmd()
+        .args([
+            "clean",
+            "--config",
+            site.join("mythic.toml").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(!site.join("public").exists());
+}
+
+// ---------------------------------------------------------------------------
+// List command
+// ---------------------------------------------------------------------------
+
+#[test]
+fn list_shows_pages() {
+    let tmp = tempdir().unwrap();
+    let site = tmp.path().join("site");
+    mythic_cmd()
+        .args(["init", site.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    let output = mythic_cmd()
+        .args([
+            "list",
+            "--config",
+            site.join("mythic.toml").to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("index"));
+    assert!(stdout.contains("pages"));
+}

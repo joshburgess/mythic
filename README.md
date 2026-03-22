@@ -52,10 +52,11 @@ Open http://localhost:3000 in your browser. Edit files and see changes instantly
 ## Commands
 
 ```
-mythic init <name>              Create a new site (--template: blank, blog, docs, portfolio)
+mythic init <name>              Create a new site (--template: blank, blog, docs, portfolio, minimal)
 mythic new <type> "Title"       Create a new content file (--draft)
-mythic build                    Build the site (--clean, --drafts, --profile, --quiet)
-mythic serve                    Dev server with live reload (--port, --open)
+mythic build                    Build the site (--clean, --drafts, --profile, --quiet, --json)
+mythic serve                    Dev server with live reload (--port, --open, --drafts)
+mythic watch                    Watch for changes and rebuild without a server
 mythic check                    Validate links, images, and heading hierarchy
 mythic list                     List all content pages with dates and slugs (--drafts)
 mythic clean                    Delete the output directory
@@ -124,6 +125,8 @@ Templates receive these variables:
 | `{{ assets.css_path }}` | Hashed CSS bundle path |
 | `{{ assets.js_path }}` | Hashed JS bundle path |
 | `{{ data }}` | Data from `_data/` files |
+| `{{ data.pages }}` | All pages as array (title, slug, url, date, tags) |
+| `{{ data.sections.blog }}` | Pages grouped by section |
 
 ## Performance
 

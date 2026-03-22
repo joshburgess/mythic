@@ -284,3 +284,40 @@ When pagination is enabled, a `paginator` object is available:
     {% endif %}
 </nav>
 ```
+
+## Content Collections
+
+All pages and section groupings are available via `data`:
+
+### `data.pages`
+
+Array of all non-draft pages with title, slug, url, date, and tags:
+
+```html
+<ul>
+{% for p in data.pages %}
+  <li><a href="{{ p.url }}">{{ p.title }}</a> — {{ p.date }}</li>
+{% endfor %}
+</ul>
+```
+
+### `data.sections`
+
+Pages grouped by their top-level directory. For example, pages in `content/blog/` are available as `data.sections.blog`:
+
+```html
+<h2>Blog Posts</h2>
+{% for post in data.sections.blog %}
+  <article>
+    <a href="{{ post.url }}">{{ post.title }}</a>
+  </article>
+{% endfor %}
+```
+
+## Build JSON Output
+
+Use `mythic build --json` for structured output in CI:
+
+```json
+{"total_pages":42,"pages_written":42,"pages_unchanged":0,"pages_skipped":2,"elapsed_ms":156}
+```
