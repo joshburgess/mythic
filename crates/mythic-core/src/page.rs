@@ -104,6 +104,10 @@ pub struct Frontmatter {
     /// Can also be inferred from the content directory structure.
     #[serde(default)]
     pub locale: Option<CompactString>,
+    /// Redirect aliases — old URLs that should redirect to this page.
+    /// Generates HTML redirect files at each alias path.
+    #[serde(default)]
+    pub aliases: Option<Vec<String>>,
 }
 
 fn default_layout() -> Option<CompactString> {

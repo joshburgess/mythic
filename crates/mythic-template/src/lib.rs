@@ -345,6 +345,7 @@ mod tests {
                 extra: None,
                 sitemap: Some(true),
                 locale: None,
+                aliases: None,
             },
             raw_content: "# Hello".to_string(),
             rendered_html: Some("<h1>Hello</h1><p>World</p>".to_string()),

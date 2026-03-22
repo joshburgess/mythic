@@ -18,10 +18,10 @@
 
 ## Missing Features
 
-- [ ] **Pagination** — paginate taxonomy term pages and section listing pages. Config: `paginate = 10` per taxonomy or in `_dir.yaml`. Generate `/tags/rust/page/2/` etc. Template context: `paginator.pages`, `paginator.next_url`, `paginator.prev_url`, `paginator.total_pages`
-- [ ] **Search index** — generate a JSON index of all pages (`search-index.json`) for client-side search (e.g., Fuse.js). Include title, slug, summary, tags
-- [ ] **404 page** — if `content/404.md` exists, render it as `public/404.html` (not `public/404/index.html`). Most static hosts serve this automatically
-- [ ] **Redirects / aliases** — frontmatter `aliases: ["/old-url/"]` generates redirect HTML files at the old paths pointing to the new URL
+- [x] **Pagination** — `mythic_core::pagination::paginate()` with Paginator context (pages, current_page, total_pages, prev_url, next_url)
+- [x] **Search index** — generates `search-index.json` with title, slug, url, summary, tags for client-side search
+- [x] **404 page** — `content/404.md` renders as both `public/404/index.html` and `public/404.html`
+- [x] **Redirects / aliases** — frontmatter `aliases: ["/old-url/"]` generates HTML redirect files with meta refresh and canonical link
 
 ## Robustness
 
