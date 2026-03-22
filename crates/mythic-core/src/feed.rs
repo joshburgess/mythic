@@ -47,6 +47,15 @@ pub fn generate_feeds(
     );
     std::fs::write(output_dir.join("rss.xml"), &rss_xml)?;
 
+    // Also generate JSON Feed
+    let json_feed = render_json_feed(
+        &feed_config.title,
+        &config.base_url,
+        feed_config.author.as_deref().unwrap_or(&config.title),
+        &feed_pages,
+    );
+    std::fs::write(output_dir.join("feed.json"), &json_feed)?;
+
     // Per-taxonomy feeds
     for taxonomy in taxonomies {
         if !taxonomy.config.feed {
@@ -196,6 +205,43 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -
     xml.push_str("</channel>\n");
     xml.push_str("</rss>\n");
     xml
+}
+
+fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -> String {
+    let base_url = base_url.trim_end_matches('/');
+
+    let items: Vec<serde_json::Value> = pages
+        .iter()
+        .map(|page| {
+            let page_url = format!("{base_url}/{}/", page.slug);
+            let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
+            let summary = page
+                .rendered_html
+                .as_deref()
+                .or(Some(&page.raw_content))
+                .map(|s| strip_html_and_truncate(s, 200))
+                .unwrap_or_default();
+
+            serde_json::json!({
+                "id": page_url,
+                "url": page_url,
+                "title": page.frontmatter.title.as_str(),
+                "content_text": summary,
+                "date_published": format!("{date}T00:00:00Z"),
+            })
+        })
+        .collect();
+
+    let feed = serde_json::json!({
+        "version": "https://jsonfeed.org/version/1.1",
+        "title": title,
+        "home_page_url": format!("{base_url}/"),
+        "feed_url": format!("{base_url}/feed.json"),
+        "authors": [{ "name": author }],
+        "items": items,
+    });
+
+    serde_json::to_string_pretty(&feed).unwrap_or_default()
 }
 
 fn escape_xml(s: &str) -> String {

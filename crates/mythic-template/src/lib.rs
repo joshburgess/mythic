@@ -94,6 +94,11 @@ impl TemplateEngine {
             }
         }
 
+        // Register custom Tera filters
+        tera.register_filter("reading_time", reading_time_filter);
+        tera.register_filter("word_count", word_count_filter);
+        tera.register_filter("truncate_words", truncate_words_filter);
+
         Ok(Self {
             tera,
             hbs,
@@ -224,6 +229,53 @@ impl TemplateEngine {
                 page.slug
             )
         })
+    }
+}
+
+// --- Custom Tera filters ---
+
+/// Filter: `{{ content | reading_time }}` → "3 min read"
+fn reading_time_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("reading_time", "value", String, value);
+    let words = text.split_whitespace().count();
+    let minutes = words.div_ceil(200);
+    let result = if minutes <= 1 {
+        "1 min read".to_string()
+    } else {
+        format!("{minutes} min read")
+    };
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ content | word_count }}` → 342
+fn word_count_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("word_count", "value", String, value);
+    let count = text.split_whitespace().count();
+    Ok(tera::Value::Number(serde_json::Number::from(count)))
+}
+
+/// Filter: `{{ content | truncate_words(count=20) }}` → first 20 words + "..."
+fn truncate_words_filter(
+    value: &tera::Value,
+    args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("truncate_words", "value", String, value);
+    let count = match args.get("count") {
+        Some(v) => v.as_u64().unwrap_or(20) as usize,
+        None => 20,
+    };
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() <= count {
+        Ok(tera::Value::String(text))
+    } else {
+        let truncated = words[..count].join(" ");
+        Ok(tera::Value::String(format!("{truncated}...")))
     }
 }
 
