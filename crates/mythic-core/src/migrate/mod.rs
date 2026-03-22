@@ -1,9 +1,9 @@
 //! Migration tools for converting sites from other static site generators.
 
-pub mod jekyll;
-pub mod hugo;
-pub mod eleventy;
 pub mod convert;
+pub mod eleventy;
+pub mod hugo;
+pub mod jekyll;
 
 use serde::{Deserialize, Serialize};
 

@@ -137,10 +137,7 @@ pub async fn serve(
     Ok(())
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let rx = state.reload_tx.subscribe();
     ws.on_upgrade(move |socket| handle_ws(socket, rx))
 }
@@ -169,10 +166,7 @@ async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<ReloadMess
     }
 }
 
-async fn file_handler(
-    State(state): State<Arc<AppState>>,
-    req: axum::extract::Request,
-) -> Response {
+async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Request) -> Response {
     let path = req.uri().path();
     let mut file_path = state.output_dir.join(path.trim_start_matches('/'));
 
@@ -194,7 +188,9 @@ async fn file_handler(
 
     let content = match std::fs::read(&file_path) {
         Ok(c) => c,
-        Err(_) => return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response(),
+        Err(_) => {
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response()
+        }
     };
 
     let mime = mime_from_path(&file_path);
@@ -254,7 +250,10 @@ pub fn notify_reload(tx: &broadcast::Sender<ReloadMessage>, msg: ReloadMessage) 
 }
 
 /// Create a new broadcast channel for reload messages.
-pub fn reload_channel() -> (broadcast::Sender<ReloadMessage>, broadcast::Receiver<ReloadMessage>) {
+pub fn reload_channel() -> (
+    broadcast::Sender<ReloadMessage>,
+    broadcast::Receiver<ReloadMessage>,
+) {
     broadcast::channel(16)
 }
 
@@ -284,14 +283,24 @@ mod tests {
     #[test]
     fn mime_detection() {
         assert_eq!(mime_from_path(Path::new("style.css")), "text/css");
-        assert_eq!(mime_from_path(Path::new("app.js")), "application/javascript");
+        assert_eq!(
+            mime_from_path(Path::new("app.js")),
+            "application/javascript"
+        );
         assert_eq!(mime_from_path(Path::new("page.html")), "text/html");
         assert_eq!(mime_from_path(Path::new("photo.webp")), "image/webp");
-        assert_eq!(mime_from_path(Path::new("unknown.xyz")), "application/octet-stream");
+        assert_eq!(
+            mime_from_path(Path::new("unknown.xyz")),
+            "application/octet-stream"
+        );
     }
 
     #[test]
     fn live_reload_script_under_5kb() {
-        assert!(LIVE_RELOAD_SCRIPT.len() < 5120, "Script is {}B, must be <5KB", LIVE_RELOAD_SCRIPT.len());
+        assert!(
+            LIVE_RELOAD_SCRIPT.len() < 5120,
+            "Script is {}B, must be <5KB",
+            LIVE_RELOAD_SCRIPT.len()
+        );
     }
 }

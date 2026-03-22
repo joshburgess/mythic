@@ -31,10 +31,7 @@ impl TemplateEngine {
 
         // Load Tera templates (.html and .tera)
         let html_glob = template_dir.join("**/*.html").to_string_lossy().to_string();
-        let mut tera = match tera::Tera::new(&html_glob) {
-            Ok(t) => t,
-            Err(_) => tera::Tera::default(),
-        };
+        let mut tera = tera::Tera::new(&html_glob).unwrap_or_default();
 
         // Also load .tera files by reading them manually
         if template_dir.exists() {
@@ -87,10 +84,9 @@ impl TemplateEngine {
                         .to_string_lossy()
                         .to_string();
 
-                    hbs.register_template_file(&rel, path)
-                        .with_context(|| {
-                            format!("Failed to load Handlebars template: {}", path.display())
-                        })?;
+                    hbs.register_template_file(&rel, path).with_context(|| {
+                        format!("Failed to load Handlebars template: {}", path.display())
+                    })?;
 
                     let layout_name = rel.trim_end_matches(".hbs").to_string();
                     layout_engines.insert(layout_name, "hbs".to_string());
@@ -129,11 +125,7 @@ impl TemplateEngine {
         assets: Option<&serde_json::Value>,
         data: Option<&serde_json::Value>,
     ) -> Result<String> {
-        let layout = page
-            .frontmatter
-            .layout
-            .as_deref()
-            .unwrap_or("default");
+        let layout = page.frontmatter.layout.as_deref().unwrap_or("default");
 
         let engine = self
             .layout_engines
@@ -181,14 +173,12 @@ impl TemplateEngine {
             ctx.insert("data", data);
         }
 
-        self.tera
-            .render(&template_name, &ctx)
-            .with_context(|| {
-                format!(
-                    "Failed to render Tera template '{template_name}' for '{}'",
-                    page.slug
-                )
-            })
+        self.tera.render(&template_name, &ctx).with_context(|| {
+            format!(
+                "Failed to render Tera template '{template_name}' for '{}'",
+                page.slug
+            )
+        })
     }
 
     fn render_hbs(
@@ -202,15 +192,10 @@ impl TemplateEngine {
         let template_name = format!("{layout}.hbs");
 
         let mut data = serde_json::Map::new();
-        data.insert(
-            "page".to_string(),
-            serde_json::to_value(&page.frontmatter)?,
-        );
+        data.insert("page".to_string(), serde_json::to_value(&page.frontmatter)?);
         data.insert(
             "content".to_string(),
-            serde_json::Value::String(
-                page.rendered_html.as_deref().unwrap_or("").to_string(),
-            ),
+            serde_json::Value::String(page.rendered_html.as_deref().unwrap_or("").to_string()),
         );
         data.insert("toc".to_string(), serde_json::to_value(&page.toc)?);
 
@@ -233,14 +218,12 @@ impl TemplateEngine {
             data.insert("data".to_string(), site_data.clone());
         }
 
-        self.hbs
-            .render(&template_name, &data)
-            .with_context(|| {
-                format!(
-                    "Failed to render Handlebars template '{template_name}' for '{}'",
-                    page.slug
-                )
-            })
+        self.hbs.render(&template_name, &data).with_context(|| {
+            format!(
+                "Failed to render Handlebars template '{template_name}' for '{}'",
+                page.slug
+            )
+        })
     }
 }
 
@@ -273,8 +256,7 @@ mod tests {
 
     #[test]
     fn tera_rendering() {
-        let engine =
-            TemplateEngine::new(Path::new("../../fixtures/basic-site/templates")).unwrap();
+        let engine = TemplateEngine::new(Path::new("../../fixtures/basic-site/templates")).unwrap();
         let page = test_page("default");
         let config = test_config();
         let html = engine.render(&page, &config).unwrap();
@@ -334,14 +316,15 @@ mod tests {
         .unwrap();
 
         let engine = TemplateEngine::new_with_default(dir.path(), "tera").unwrap();
-        let html = engine.render(&test_page("default"), &test_config()).unwrap();
+        let html = engine
+            .render(&test_page("default"), &test_config())
+            .unwrap();
         assert!(html.contains("Test Page"));
     }
 
     #[test]
     fn missing_template_errors() {
-        let engine =
-            TemplateEngine::new(Path::new("../../fixtures/basic-site/templates")).unwrap();
+        let engine = TemplateEngine::new(Path::new("../../fixtures/basic-site/templates")).unwrap();
         let page = test_page("nonexistent");
         assert!(engine.render(&page, &test_config()).is_err());
     }
@@ -358,11 +341,7 @@ mod tests {
                 date: Some("2025-06-15".into()),
                 draft: Some(false),
                 layout: Some(layout.into()),
-                tags: Some(vec![
-                    "rust".into(),
-                    "web".into(),
-                    "ssg".into(),
-                ]),
+                tags: Some(vec!["rust".into(), "web".into(), "ssg".into()]),
                 extra: None,
                 sitemap: Some(true),
                 locale: None,

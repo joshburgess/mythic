@@ -64,8 +64,7 @@ impl Highlighter {
             .or_else(|| ts.themes.get("base16-ocean.dark"))
             .expect("No theme found");
 
-        syntect::html::css_for_theme_with_class_style(theme, ClassStyle::Spaced)
-            .unwrap_or_default()
+        syntect::html::css_for_theme_with_class_style(theme, ClassStyle::Spaced).unwrap_or_default()
     }
 }
 

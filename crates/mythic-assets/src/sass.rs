@@ -42,8 +42,7 @@ pub fn compile_and_concat(styles_dir: &Path) -> Result<String> {
 
 /// Compile a single Sass/SCSS file to CSS.
 pub fn compile_file(path: &Path) -> Result<String> {
-    let options = grass::Options::default()
-        .load_path(path.parent().unwrap_or(Path::new(".")));
+    let options = grass::Options::default().load_path(path.parent().unwrap_or(Path::new(".")));
 
     let css = grass::from_path(path, &options)
         .map_err(|e| anyhow::anyhow!("Sass compilation error in {}: {}", path.display(), e))?;
@@ -72,11 +71,7 @@ mod tests {
     #[test]
     fn scss_imports() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("_variables.scss"),
-            "$primary: blue;",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("_variables.scss"), "$primary: blue;").unwrap();
         std::fs::write(
             dir.path().join("main.scss"),
             "@import 'variables';\nbody { color: $primary; }",

@@ -152,7 +152,13 @@ fn strip_html(s: &str) -> String {
 fn slugify_heading(text: &str) -> String {
     text.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
@@ -166,7 +172,8 @@ mod tests {
 
     #[test]
     fn basic_toc_extraction() {
-        let html = "<h1>Title</h1>\n<p>text</p>\n<h2>Section A</h2>\n<p>more</p>\n<h2>Section B</h2>";
+        let html =
+            "<h1>Title</h1>\n<p>text</p>\n<h2>Section A</h2>\n<p>more</p>\n<h2>Section B</h2>";
         let (entries, modified) = extract_toc(html, 1, 6);
 
         assert_eq!(entries.len(), 3);
@@ -207,9 +214,21 @@ mod tests {
     #[test]
     fn nested_toc_html() {
         let entries = vec![
-            TocEntry { level: 2, text: "A".to_string(), id: "a".to_string() },
-            TocEntry { level: 3, text: "A.1".to_string(), id: "a-1".to_string() },
-            TocEntry { level: 2, text: "B".to_string(), id: "b".to_string() },
+            TocEntry {
+                level: 2,
+                text: "A".to_string(),
+                id: "a".to_string(),
+            },
+            TocEntry {
+                level: 3,
+                text: "A.1".to_string(),
+                id: "a-1".to_string(),
+            },
+            TocEntry {
+                level: 2,
+                text: "B".to_string(),
+                id: "b".to_string(),
+            },
         ];
 
         let html = render_toc_html(&entries);

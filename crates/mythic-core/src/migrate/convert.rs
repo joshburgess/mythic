@@ -43,7 +43,13 @@ pub fn liquid_to_tera(input: &str) -> (String, Vec<String>) {
     // {{ site.title }} — same in Tera
 
     // Detect unconverted Liquid patterns
-    for pattern in &["| date:", "| markdownify", "| where:", "| sort:", "| group_by"] {
+    for pattern in &[
+        "| date:",
+        "| markdownify",
+        "| where:",
+        "| sort:",
+        "| group_by",
+    ] {
         if output.contains(pattern) {
             warnings.push(format!("Liquid filter `{pattern}` needs manual conversion"));
         }
@@ -99,9 +105,7 @@ pub fn go_template_to_tera(input: &str) -> (String, Vec<String>) {
         let after = &rest[start + 9..];
         if let Some(end) = after.find(" }}") {
             let collection = after[..end].trim();
-            let var_name = collection
-                .trim_start_matches('.')
-                .to_lowercase();
+            let var_name = collection.trim_start_matches('.').to_lowercase();
             result.push_str(&format!("{{% for item in {var_name} %}}"));
             rest = &after[end + 3..];
         } else {
@@ -141,7 +145,13 @@ pub fn go_template_to_tera(input: &str) -> (String, Vec<String>) {
     output = result;
 
     // Detect unconverted patterns
-    for pattern in &["{{ with ", "{{ block ", "{{ define ", "| safeHTML", "| markdownify"] {
+    for pattern in &[
+        "{{ with ",
+        "{{ block ",
+        "{{ define ",
+        "| safeHTML",
+        "| markdownify",
+    ] {
         if output.contains(pattern) {
             warnings.push(format!("Go template `{pattern}` needs manual conversion"));
         }
@@ -170,10 +180,7 @@ pub fn nunjucks_to_tera(input: &str) -> (String, Vec<String>) {
         output = output.replace("| dump", "| json_encode()");
     }
 
-    if output.contains("| striptags") {
-        output = output.replace("| striptags", "| striptags");
-        // Same in Tera
-    }
+    // "| striptags" is identical in both Nunjucks and Tera — no conversion needed
 
     // {% asyncEach %} / {% asyncAll %} — no equivalent
     for pattern in &["{% asyncEach", "{% asyncAll", "| groupby"] {

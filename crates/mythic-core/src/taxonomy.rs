@@ -31,10 +31,7 @@ pub struct Taxonomy {
 }
 
 /// Extract taxonomies from pages and generate taxonomy/term pages.
-pub fn build_taxonomies(
-    config: &SiteConfig,
-    pages: &[Page],
-) -> Vec<Taxonomy> {
+pub fn build_taxonomies(config: &SiteConfig, pages: &[Page]) -> Vec<Taxonomy> {
     config
         .taxonomies
         .iter()
@@ -56,15 +53,12 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
             if slug.is_empty() {
                 continue;
             }
-            terms_map
-                .entry(slug)
-                .or_default()
-                .push(TaxonomyPageRef {
-                    title: page.frontmatter.title.to_string(),
-                    slug: page.slug.clone(),
-                    date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
-                    url: format!("/{}/", page.slug),
-                });
+            terms_map.entry(slug).or_default().push(TaxonomyPageRef {
+                title: page.frontmatter.title.to_string(),
+                slug: page.slug.clone(),
+                date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
+                url: format!("/{}/", page.slug),
+            });
         }
     }
 
@@ -172,7 +166,7 @@ pub fn generate_taxonomy_pages(taxonomies: &[Taxonomy]) -> Vec<Page> {
                 rendered_html: None,
                 output_path: None,
                 content_hash: 0,
-            toc: Vec::new(),
+                toc: Vec::new(),
             });
         }
     }
@@ -191,7 +185,11 @@ mod tests {
             slug: slug.to_string(),
             frontmatter: Frontmatter {
                 title: title.into(),
-                tags: Some(tags.into_iter().map(compact_str::CompactString::from).collect()),
+                tags: Some(
+                    tags.into_iter()
+                        .map(compact_str::CompactString::from)
+                        .collect(),
+                ),
                 date: date.map(compact_str::CompactString::from),
                 ..Default::default()
             },
@@ -237,9 +235,7 @@ mod tests {
     #[test]
     fn generates_listing_and_term_pages() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["rust"], None),
-        ];
+        let pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
 
         let taxonomies = build_taxonomies(&config, &pages);
         let generated = generate_taxonomy_pages(&taxonomies);
@@ -267,10 +263,7 @@ mod tests {
         let mut pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
         // Add category via extra
         let extra = pages[0].frontmatter.extra.get_or_insert_with(HashMap::new);
-        extra.insert(
-            "categories".to_string(),
-            serde_json::json!(["tutorials"]),
-        );
+        extra.insert("categories".to_string(), serde_json::json!(["tutorials"]));
 
         let taxonomies = build_taxonomies(&config, &pages);
         assert_eq!(taxonomies.len(), 2);
@@ -288,7 +281,11 @@ mod tests {
         ];
 
         let taxonomies = build_taxonomies(&config, &pages);
-        let rust = taxonomies[0].terms.iter().find(|t| t.name == "rust").unwrap();
+        let rust = taxonomies[0]
+            .terms
+            .iter()
+            .find(|t| t.name == "rust")
+            .unwrap();
         assert_eq!(rust.pages[0].title, "New");
         assert_eq!(rust.pages[1].title, "Mid");
         assert_eq!(rust.pages[2].title, "Old");
@@ -297,21 +294,19 @@ mod tests {
     #[test]
     fn no_tags_produces_empty_taxonomy() {
         let config = config_with_tags();
-        let pages = vec![
-            Page {
-                source_path: PathBuf::from("no-tags.md"),
-                slug: "no-tags".to_string(),
-                frontmatter: Frontmatter {
-                    title: "No Tags".into(),
-                    ..Default::default()
-                },
-                raw_content: String::new(),
-                rendered_html: None,
-                output_path: None,
-                content_hash: 0,
-                toc: Vec::new(),
+        let pages = vec![Page {
+            source_path: PathBuf::from("no-tags.md"),
+            slug: "no-tags".to_string(),
+            frontmatter: Frontmatter {
+                title: "No Tags".into(),
+                ..Default::default()
             },
-        ];
+            raw_content: String::new(),
+            rendered_html: None,
+            output_path: None,
+            content_hash: 0,
+            toc: Vec::new(),
+        }];
 
         let taxonomies = build_taxonomies(&config, &pages);
         assert_eq!(taxonomies[0].terms.len(), 0);
@@ -329,12 +324,14 @@ mod tests {
     #[test]
     fn term_slugs_are_lowercased() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["Rust", "WEB"], None),
-        ];
+        let pages = vec![page_with_tags("Post", "post", vec!["Rust", "WEB"], None)];
 
         let taxonomies = build_taxonomies(&config, &pages);
-        let terms: Vec<&str> = taxonomies[0].terms.iter().map(|t| t.slug.as_str()).collect();
+        let terms: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.slug.as_str())
+            .collect();
         assert!(terms.contains(&"rust"));
         assert!(terms.contains(&"web"));
     }
@@ -342,9 +339,7 @@ mod tests {
     #[test]
     fn taxonomy_page_urls_are_correct() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "blog/my-post", vec!["rust"], None),
-        ];
+        let pages = vec![page_with_tags("Post", "blog/my-post", vec!["rust"], None)];
 
         let taxonomies = build_taxonomies(&config, &pages);
         let rust = &taxonomies[0].terms[0];
@@ -354,9 +349,7 @@ mod tests {
     #[test]
     fn generated_pages_have_correct_layouts() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["rust"], None),
-        ];
+        let pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
 
         let taxonomies = build_taxonomies(&config, &pages);
         let generated = generate_taxonomy_pages(&taxonomies);
@@ -371,9 +364,12 @@ mod tests {
     #[test]
     fn page_in_multiple_terms() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Multi", "multi", vec!["rust", "web", "perf"], None),
-        ];
+        let pages = vec![page_with_tags(
+            "Multi",
+            "multi",
+            vec!["rust", "web", "perf"],
+            None,
+        )];
 
         let taxonomies = build_taxonomies(&config, &pages);
         assert_eq!(taxonomies[0].terms.len(), 3);
@@ -386,12 +382,19 @@ mod tests {
     #[test]
     fn duplicate_tags_deduplicated() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["rust", "rust", "Rust"], None),
-        ];
+        let pages = vec![page_with_tags(
+            "Post",
+            "post",
+            vec!["rust", "rust", "Rust"],
+            None,
+        )];
         let taxonomies = build_taxonomies(&config, &pages);
         // "rust" and "Rust" should collapse to the same term via slugification
-        let term_slugs: Vec<&str> = taxonomies[0].terms.iter().map(|t| t.slug.as_str()).collect();
+        let term_slugs: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.slug.as_str())
+            .collect();
         // Should have exactly one "rust" term
         assert_eq!(term_slugs.iter().filter(|&&s| s == "rust").count(), 1);
     }
@@ -399,25 +402,42 @@ mod tests {
     #[test]
     fn tag_with_special_characters() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["C++", "C#", "node.js"], None),
-        ];
+        let pages = vec![page_with_tags(
+            "Post",
+            "post",
+            vec!["C++", "C#", "node.js"],
+            None,
+        )];
         let taxonomies = build_taxonomies(&config, &pages);
         // C++ → c-plus-plus, C# → c-sharp, node.js → node-js — all distinct
-        assert_eq!(taxonomies[0].terms.len(), 3,
+        assert_eq!(
+            taxonomies[0].terms.len(),
+            3,
             "C++, C#, and node.js should produce 3 distinct slugs, got: {:?}",
-            taxonomies[0].terms.iter().map(|t| &t.slug).collect::<Vec<_>>());
+            taxonomies[0]
+                .terms
+                .iter()
+                .map(|t| &t.slug)
+                .collect::<Vec<_>>()
+        );
         for term in &taxonomies[0].terms {
-            assert!(!term.slug.is_empty(), "Tag '{}' produced empty slug", term.name);
+            assert!(
+                !term.slug.is_empty(),
+                "Tag '{}' produced empty slug",
+                term.name
+            );
         }
     }
 
     #[test]
     fn empty_tag_string_filtered() {
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["rust", "", "web"], None),
-        ];
+        let pages = vec![page_with_tags(
+            "Post",
+            "post",
+            vec!["rust", "", "web"],
+            None,
+        )];
         let taxonomies = build_taxonomies(&config, &pages);
         // Empty tags should be filtered out, leaving only "rust" and "web"
         assert_eq!(taxonomies[0].terms.len(), 2);
@@ -429,13 +449,14 @@ mod tests {
     fn taxonomy_term_with_slash() {
         // Hugo #4090: tags like "AC/DC" or "client/server" must not break paths
         let config = config_with_tags();
-        let pages = vec![
-            page_with_tags("Post", "post", vec!["AC/DC"], None),
-        ];
+        let pages = vec![page_with_tags("Post", "post", vec!["AC/DC"], None)];
         let taxonomies = build_taxonomies(&config, &pages);
         assert_eq!(taxonomies[0].terms.len(), 1);
         // Slug should not contain raw slash
-        assert!(!taxonomies[0].terms[0].slug.contains('/'), "Slash in tag should be slugified");
+        assert!(
+            !taxonomies[0].terms[0].slug.contains('/'),
+            "Slash in tag should be slugified"
+        );
     }
 
     #[test]

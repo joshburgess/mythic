@@ -101,10 +101,8 @@ fn toml_to_json(val: toml::Value) -> Value {
         toml::Value::Datetime(d) => Value::String(d.to_string()),
         toml::Value::Array(a) => Value::Array(a.into_iter().map(toml_to_json).collect()),
         toml::Value::Table(t) => {
-            let map: serde_json::Map<String, Value> = t
-                .into_iter()
-                .map(|(k, v)| (k, toml_to_json(v)))
-                .collect();
+            let map: serde_json::Map<String, Value> =
+                t.into_iter().map(|(k, v)| (k, toml_to_json(v))).collect();
             Value::Object(map)
         }
     }
@@ -161,11 +159,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let nav = dir.path().join("nav");
         std::fs::create_dir_all(&nav).unwrap();
-        std::fs::write(
-            nav.join("main.yaml"),
-            "- label: Home\n  url: /",
-        )
-        .unwrap();
+        std::fs::write(nav.join("main.yaml"), "- label: Home\n  url: /").unwrap();
 
         let data = load_data(dir.path()).unwrap();
         assert_eq!(data["nav"]["main"][0]["label"], "Home");
@@ -225,11 +219,7 @@ mod tests {
     #[test]
     fn data_file_with_root_array() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("items.json"),
-            r#"[1, 2, 3, "four"]"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("items.json"), r#"[1, 2, 3, "four"]"#).unwrap();
 
         let data = load_data(dir.path()).unwrap();
         assert!(data["items"].is_array());

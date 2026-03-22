@@ -75,5 +75,10 @@ fn bench_markdown_rendering(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_full_build, bench_incremental_build, bench_markdown_rendering);
+criterion_group!(
+    benches,
+    bench_full_build,
+    bench_incremental_build,
+    bench_markdown_rendering
+);
 criterion_main!(benches);

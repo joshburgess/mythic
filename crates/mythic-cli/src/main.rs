@@ -5,7 +5,10 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "mythic", about = "A fast static site generator written in Rust")]
+#[command(
+    name = "mythic",
+    about = "A fast static site generator written in Rust"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -82,9 +85,7 @@ fn main() -> Result<()> {
             profile,
         } => {
             let site_config = mythic_core::config::load_config(&config)?;
-            let root = config
-                .parent()
-                .unwrap_or_else(|| Path::new("."));
+            let root = config.parent().unwrap_or_else(|| Path::new("."));
 
             if clean {
                 let output = root.join(&site_config.output_dir);
@@ -109,9 +110,7 @@ fn main() -> Result<()> {
         }
         Commands::Check { config } => {
             let site_config = mythic_core::config::load_config(&config)?;
-            let root = config
-                .parent()
-                .unwrap_or_else(|| Path::new("."));
+            let root = config.parent().unwrap_or_else(|| Path::new("."));
             let output_dir = root.join(&site_config.output_dir);
 
             let report = mythic_core::check::check_site(&output_dir)?;
@@ -130,7 +129,9 @@ fn main() -> Result<()> {
                 "jekyll" => mythic_core::migrate::jekyll::migrate(&source, &output)?,
                 "hugo" => mythic_core::migrate::hugo::migrate(&source, &output)?,
                 "eleventy" | "11ty" => mythic_core::migrate::eleventy::migrate(&source, &output)?,
-                other => anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy"),
+                other => {
+                    anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy")
+                }
             };
             report.print_summary();
         }
@@ -191,16 +192,8 @@ fn full_build(
             .as_ref()
             .map(|h| h.line_numbers)
             .unwrap_or(false),
-        toc_min_level: site_config
-            .toc
-            .as_ref()
-            .map(|t| t.min_level)
-            .unwrap_or(2),
-        toc_max_level: site_config
-            .toc
-            .as_ref()
-            .map(|t| t.max_level)
-            .unwrap_or(4),
+        toc_min_level: site_config.toc.as_ref().map(|t| t.min_level).unwrap_or(2),
+        toc_max_level: site_config.toc.as_ref().map(|t| t.max_level).unwrap_or(4),
     };
 
     // Prepare shortcode dir — check existence once, not per-page
@@ -282,9 +275,11 @@ fn full_build(
                 }
             }
         },
-        Some(|page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-            engine.render_full(page, cfg, Some(&assets_value), Some(&site_data))
-        }),
+        Some(
+            |page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
+                engine.render_full(page, cfg, Some(&assets_value), Some(&site_data))
+            },
+        ),
         profile,
     )?;
 
@@ -293,51 +288,53 @@ fn full_build(
     // Post-build: use the pages returned from build (no re-discovery needed)
     let needs_post_build = !site_config.taxonomies.is_empty()
         || site_config.feed.is_some()
-        || site_config.sitemap.as_ref().map(|s| s.enabled).unwrap_or(true);
+        || site_config
+            .sitemap
+            .as_ref()
+            .map(|s| s.enabled)
+            .unwrap_or(true);
 
     if needs_post_build {
+        // Pages are already filtered for drafts by the build pipeline
+        let non_draft_pages = built_pages;
 
-    // Pages are already filtered for drafts by the build pipeline
-    let non_draft_pages = built_pages;
+        // Generate taxonomy pages
+        if !site_config.taxonomies.is_empty() {
+            let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
+            let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
 
-    // Generate taxonomy pages
-    if !site_config.taxonomies.is_empty() {
-        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
-        let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
-
-        // Render and write taxonomy pages
-        for mut page in taxonomy_pages {
-            page.rendered_html = Some(String::new()); // Empty content for listing pages
-            match engine.render(&page, site_config) {
-                Ok(html) => {
-                    let dest = output_dir.join(&page.slug).join("index.html");
-                    if let Some(parent) = dest.parent() {
-                        std::fs::create_dir_all(parent)?;
+            // Render and write taxonomy pages
+            for mut page in taxonomy_pages {
+                page.rendered_html = Some(String::new()); // Empty content for listing pages
+                match engine.render(&page, site_config) {
+                    Ok(html) => {
+                        let dest = output_dir.join(&page.slug).join("index.html");
+                        if let Some(parent) = dest.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        std::fs::write(&dest, html)?;
                     }
-                    std::fs::write(&dest, html)?;
-                }
-                Err(_) => {
-                    // Template may not exist (taxonomy_list.html / taxonomy_term.html)
-                    // This is expected if the user hasn't created taxonomy templates
+                    Err(_) => {
+                        // Template may not exist (taxonomy_list.html / taxonomy_term.html)
+                        // This is expected if the user hasn't created taxonomy templates
+                    }
                 }
             }
+
+            // Generate feeds for taxonomies
+            mythic_core::feed::generate_feeds(
+                site_config,
+                &non_draft_pages,
+                &taxonomies,
+                &output_dir,
+            )?;
+        } else if site_config.feed.is_some() {
+            // Site-wide feed only (no taxonomies)
+            mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
         }
 
-        // Generate feeds for taxonomies
-        mythic_core::feed::generate_feeds(
-            site_config,
-            &non_draft_pages,
-            &taxonomies,
-            &output_dir,
-        )?;
-    } else if site_config.feed.is_some() {
-        // Site-wide feed only (no taxonomies)
-        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
-    }
-
-    // Generate sitemap and robots.txt
-    mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
-
+        // Generate sitemap and robots.txt
+        mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
     } // end needs_post_build
 
     // Run post-build hooks
@@ -350,7 +347,7 @@ fn full_build(
     Ok(())
 }
 
-async fn cmd_serve(config_path: &PathBuf, port: u16, drafts: bool, open: bool) -> Result<()> {
+async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
@@ -413,7 +410,11 @@ fn init_project(name: &str, template: &str) -> Result<()> {
     let starters_dir = find_starters_dir();
     let starter_path = starters_dir.as_ref().and_then(|d| {
         let p = d.join(template);
-        if p.exists() { Some(p) } else { None }
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
     });
 
     if let Some(starter) = starter_path {

@@ -1,9 +1,9 @@
 //! Asset processing for Mythic: images, CSS, JavaScript, and Sass/SCSS.
 
 pub mod images;
-pub mod styles;
-pub mod scripts;
 pub mod sass;
+pub mod scripts;
+pub mod styles;
 
 use anyhow::Result;
 use mythic_core::config::SiteConfig;
@@ -31,11 +31,7 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
     // Compile Sass if configured
     let styles_dir = root.join(&config.styles_dir);
     if styles_dir.exists() {
-        let sass_enabled = config
-            .sass
-            .as_ref()
-            .map(|s| s.enabled)
-            .unwrap_or(true);
+        let sass_enabled = config.sass.as_ref().map(|s| s.enabled).unwrap_or(true);
 
         let css = if sass_enabled {
             sass::compile_and_concat(&styles_dir)?

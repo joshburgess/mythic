@@ -54,18 +54,10 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read: {}", path.display()))?;
 
-        let content_hash = {
-            use std::hash::{BuildHasher, Hash, Hasher};
-            let mut hasher = hash_state.build_hasher();
-            raw.hash(&mut hasher);
-            hasher.finish()
-        };
+        let content_hash = hash_state.hash_one(&raw);
 
         let rel = path.strip_prefix(&content_dir).unwrap_or(path);
-        let slug = rel
-            .with_extension("")
-            .to_string_lossy()
-            .replace('\\', "/");
+        let slug = rel.with_extension("").to_string_lossy().replace('\\', "/");
 
         let (mut frontmatter, body) = mythic_markdown_parse_stub(&raw);
 
@@ -112,20 +104,20 @@ fn intern_frontmatter(interner: &ThreadedRodeo, fm: &mut crate::page::Frontmatte
 fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     use crate::page::Frontmatter;
 
-    if raw.starts_with("---") {
-        if let Some(end) = raw[3..].find("---") {
-            let yaml_str = &raw[3..3 + end];
-            let body = raw[3 + end + 3..].trim_start().to_string();
+    if let Some(after_open) = raw.strip_prefix("---") {
+        if let Some(end) = after_open.find("---") {
+            let yaml_str = &after_open[..end];
+            let body = after_open[end + 3..].trim_start().to_string();
             if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(yaml_str) {
                 return (fm, body);
             }
         }
     }
 
-    if raw.starts_with("+++") {
-        if let Some(end) = raw[3..].find("+++") {
-            let toml_str = &raw[3..3 + end];
-            let body = raw[3 + end + 3..].trim_start().to_string();
+    if let Some(after_open) = raw.strip_prefix("+++") {
+        if let Some(end) = after_open.find("+++") {
+            let toml_str = &after_open[..end];
+            let body = after_open[end + 3..].trim_start().to_string();
             if let Ok(fm) = toml::from_str::<Frontmatter>(toml_str) {
                 return (fm, body);
             }
@@ -438,10 +430,7 @@ mod tests {
         // All pages should have layout "blog" and tags ["rust", "web"]
         for page in &pages {
             assert_eq!(page.frontmatter.layout.as_deref(), Some("blog"));
-            assert_eq!(
-                page.frontmatter.tags.as_ref().unwrap(),
-                &["rust", "web"]
-            );
+            assert_eq!(page.frontmatter.tags.as_ref().unwrap(), &["rust", "web"]);
         }
     }
 }

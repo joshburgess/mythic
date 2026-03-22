@@ -163,3 +163,42 @@ ugly_urls = true
 ```
 
 This eliminates `mkdir` syscalls entirely and produces ~22% faster builds at 10k pages.
+
+## Future: Arena Allocator Design
+
+The content discovery phase allocates frontmatter strings (title, date, layout, tags) per page. At 10k pages this is ~50-100k small allocations. A bump allocator (`bumpalo`) could replace these with arena-allocated `&'arena str` references, reducing allocator pressure.
+
+### Design
+
+```rust
+// Current (owned strings, heap-allocated per page)
+pub struct Frontmatter {
+    pub title: CompactString,      // heap or inline
+    pub layout: Option<CompactString>,
+    pub tags: Option<Vec<CompactString>>,
+}
+
+// Arena approach (borrowed from bump allocator)
+pub struct Frontmatter<'a> {
+    pub title: &'a str,            // points into arena
+    pub layout: Option<&'a str>,
+    pub tags: Option<Vec<&'a str>>,
+}
+```
+
+### Trade-offs
+
+**Pros:**
+- Near-zero allocation cost for all frontmatter strings
+- Better cache locality (arena is contiguous memory)
+- Estimated 10-15ms savings on discovery (currently 147ms)
+
+**Cons:**
+- Lifetime parameter `'a` propagates to `Page<'a>`, `Vec<Page<'a>>`, `build()` signature, `Plugin` trait methods, and all 322+ tests
+- `bumpalo::Bump` is `!Sync`, which conflicts with rayon parallelism. Would need per-thread arenas or `bumpalo`'s `allocator_api` feature
+- Serde deserialization into arena-borrowed strings requires `#[serde(borrow)]` and `Cow<'a, str>` or custom deserializer
+- `Clone` becomes non-trivial (can't clone arena references to a different arena)
+
+### Recommendation
+
+Attempt on a feature branch. The current `CompactString` + `lasso` approach captures most of the benefit (inline small strings + deduplicated repeated strings) without the lifetime complexity. The arena approach would primarily help sites with very long frontmatter values (titles >24 bytes) at high page counts (50k+).

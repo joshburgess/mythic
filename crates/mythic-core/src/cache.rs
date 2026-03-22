@@ -49,11 +49,12 @@ impl DepGraph {
     /// Save the cache to disk.
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create cache directory: {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create cache directory: {}", parent.display())
+            })?;
         }
-        let json = serde_json::to_string_pretty(&self)
-            .context("Failed to serialize build cache")?;
+        let json =
+            serde_json::to_string_pretty(&self).context("Failed to serialize build cache")?;
         std::fs::write(&self.path, json)
             .with_context(|| format!("Failed to write cache: {}", self.path.display()))?;
         Ok(())

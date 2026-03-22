@@ -205,7 +205,7 @@ impl Plugin for ReadingTimePlugin {
 
     fn on_page_discovered(&self, page: &mut Page) -> Result<()> {
         let word_count = page.raw_content.split_whitespace().count();
-        let minutes = (word_count + self.words_per_minute - 1) / self.words_per_minute;
+        let minutes = word_count.div_ceil(self.words_per_minute);
         let reading_time = if minutes <= 1 {
             "1 min read".to_string()
         } else {

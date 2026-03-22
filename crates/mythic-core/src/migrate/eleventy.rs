@@ -111,10 +111,7 @@ fn migrate_content(source: &Path, output: &Path, report: &mut MigrationReport) -
             let rel = path.strip_prefix(&content_dir).unwrap_or(path);
 
             // Skip node_modules, config files, etc.
-            if rel.starts_with("node_modules")
-                || rel.starts_with("_")
-                || rel.starts_with(".")
-            {
+            if rel.starts_with("node_modules") || rel.starts_with("_") || rel.starts_with(".") {
                 continue;
             }
 
@@ -184,7 +181,11 @@ fn migrate_includes(source: &Path, output: &Path, report: &mut MigrationReport) 
     migrate_includes_from(&includes_dir, output, report)
 }
 
-fn migrate_includes_from(includes_dir: &Path, output: &Path, report: &mut MigrationReport) -> Result<()> {
+fn migrate_includes_from(
+    includes_dir: &Path,
+    output: &Path,
+    report: &mut MigrationReport,
+) -> Result<()> {
     let out_templates = output.join("templates");
 
     for entry in WalkDir::new(includes_dir)
@@ -232,10 +233,7 @@ fn migrate_includes_from(includes_dir: &Path, output: &Path, report: &mut Migrat
 }
 
 fn migrate_data(source: &Path, output: &Path, report: &mut MigrationReport) -> Result<()> {
-    let data_dirs = [
-        source.join("_data"),
-        source.join("src/_data"),
-    ];
+    let data_dirs = [source.join("_data"), source.join("src/_data")];
 
     for data_dir in &data_dirs {
         if !data_dir.exists() {
@@ -244,10 +242,7 @@ fn migrate_data(source: &Path, output: &Path, report: &mut MigrationReport) -> R
 
         let out_data = output.join("_data");
 
-        for entry in WalkDir::new(data_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in WalkDir::new(data_dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
             let rel = path.strip_prefix(data_dir).unwrap_or(path);
             let target = out_data.join(rel);
@@ -330,7 +325,8 @@ mod tests {
             r#"module.exports = function(config) {
                 return { dir: { input: "src", data: "_data" } };
             };"#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create src dir so content migration doesn't fail
         std::fs::create_dir_all(src.path().join("src")).unwrap();
@@ -353,12 +349,14 @@ mod tests {
         std::fs::write(
             src.path().join(".eleventy.js"),
             "module.exports = { dir: { input: \"src\" } };",
-        ).unwrap();
+        )
+        .unwrap();
 
         std::fs::write(
             content.join("page.njk"),
             "{% for item in items %}<li>{{ item | dump }}</li>{% endfor %}",
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
@@ -371,10 +369,7 @@ mod tests {
         let src = tempfile::tempdir().unwrap();
         let out = tempfile::tempdir().unwrap();
 
-        std::fs::write(
-            src.path().join(".eleventy.js"),
-            "module.exports = {};",
-        ).unwrap();
+        std::fs::write(src.path().join(".eleventy.js"), "module.exports = {};").unwrap();
 
         let data = src.path().join("_data/posts");
         std::fs::create_dir_all(&data).unwrap();
@@ -383,7 +378,8 @@ mod tests {
         std::fs::write(
             data.join("posts.json"),
             r#"{"layout": "post", "permalink": "/blog/{{ slug }}/"}"#,
-        ).unwrap();
+        )
+        .unwrap();
 
         migrate(src.path(), out.path()).unwrap();
 
@@ -396,16 +392,16 @@ mod tests {
         let src = tempfile::tempdir().unwrap();
         let out = tempfile::tempdir().unwrap();
 
-        std::fs::write(
-            src.path().join(".eleventy.js"),
-            "module.exports = {};",
-        ).unwrap();
+        std::fs::write(src.path().join(".eleventy.js"), "module.exports = {};").unwrap();
 
         let data = src.path().join("_data");
         std::fs::create_dir_all(&data).unwrap();
         std::fs::write(data.join("api.js"), "module.exports = async () => {}").unwrap();
 
         let report = migrate(src.path(), out.path()).unwrap();
-        assert!(report.warnings.iter().any(|w| w.contains("api.js") && w.contains("manual")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|w| w.contains("api.js") && w.contains("manual")));
     }
 }
