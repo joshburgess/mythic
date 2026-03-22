@@ -1659,6 +1659,8 @@ dependencies = [
  "mythic-markdown",
  "mythic-server",
  "mythic-template",
+ "serde_json",
+ "tempfile",
  "tokio",
  "walkdir",
 ]
@@ -1667,8 +1669,10 @@ dependencies = [
 name = "mythic-core"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "anyhow",
  "criterion",
+ "lasso",
  "rayon",
  "rhai",
  "serde",

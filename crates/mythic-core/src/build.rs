@@ -1,5 +1,8 @@
 //! Build pipeline orchestration with optional profiling.
 //!
+//! Uses ahash for faster content hashing and lasso for string interning
+//! of frequently repeated values (layout names, tag values).
+//!
 //! The build pipeline flows through these stages:
 //!
 //! 1. **Discovery** — Walk the content directory, read files, parse frontmatter
@@ -53,21 +56,24 @@ impl BuildProfile {
 }
 
 /// Run the full build pipeline with pluggable render and template steps.
+/// Returns the build report and the processed pages for post-build use.
 pub fn build<R, T>(
     config: &SiteConfig,
     root: &Path,
     include_drafts: bool,
     render_fn: R,
     template_fn: Option<T>,
-) -> Result<BuildReport>
+) -> Result<(BuildReport, Vec<Page>)>
 where
     R: Fn(&mut [Page]),
-    T: Fn(&Page, &SiteConfig) -> Result<String>,
+    T: Fn(&Page, &SiteConfig) -> Result<String> + Sync,
 {
     build_with_profile(config, root, include_drafts, render_fn, template_fn, false)
 }
 
 /// Run the build pipeline with optional profiling.
+/// Returns the build report and the processed pages for post-build use
+/// (taxonomy generation, feeds, sitemaps).
 pub fn build_with_profile<R, T>(
     config: &SiteConfig,
     root: &Path,
@@ -75,10 +81,10 @@ pub fn build_with_profile<R, T>(
     render_fn: R,
     template_fn: Option<T>,
     profile: bool,
-) -> Result<BuildReport>
+) -> Result<(BuildReport, Vec<Page>)>
 where
     R: Fn(&mut [Page]),
-    T: Fn(&Page, &SiteConfig) -> Result<String>,
+    T: Fn(&Page, &SiteConfig) -> Result<String> + Sync,
 {
     let start = Instant::now();
 
@@ -107,12 +113,16 @@ where
     render_fn(&mut pages);
     let render_ms = t1.elapsed().as_millis();
 
-    // Apply templates if provided
+    // Apply templates in parallel if provided
     let t2 = Instant::now();
     if let Some(ref tmpl_fn) = template_fn {
-        for page in &mut pages {
-            let html = tmpl_fn(page, config)?;
-            page.rendered_html = Some(html);
+        let results: Vec<Result<String>> = pages
+            .par_iter()
+            .map(|page| tmpl_fn(page, config))
+            .collect();
+
+        for (page, result) in pages.iter_mut().zip(results) {
+            page.rendered_html = Some(result?);
         }
     }
     let template_ms = t2.elapsed().as_millis();
@@ -247,7 +257,7 @@ where
         prof.print();
     }
 
-    Ok(report)
+    Ok((report, pages))
 }
 
 #[cfg(test)]
@@ -268,7 +278,7 @@ mod tests {
     type NoTemplate = fn(&Page, &SiteConfig) -> Result<String>;
 
     fn do_build(config: &SiteConfig, root: &Path) -> BuildReport {
-        build(config, root, false, noop_render, None::<NoTemplate>).unwrap()
+        build(config, root, false, noop_render, None::<NoTemplate>).unwrap().0
     }
 
     #[test]
@@ -360,7 +370,7 @@ mod tests {
         std::fs::create_dir_all(&content).unwrap();
         std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nPage A").unwrap();
 
-        let report = build_with_profile(
+        let (report, _pages) = build_with_profile(
             &config, dir.path(), false, noop_render, None::<NoTemplate>, true,
         ).unwrap();
 
@@ -467,7 +477,7 @@ mod tests {
         std::fs::create_dir_all(&content).unwrap();
         std::fs::write(content.join("a.md"), "---\ntitle: Draft\ndraft: true\n---\nDraft").unwrap();
 
-        let report = build(&config, dir.path(), true, noop_render, None::<NoTemplate>).unwrap();
+        let (report, _) = build(&config, dir.path(), true, noop_render, None::<NoTemplate>).unwrap();
         assert_eq!(report.pages_skipped, 0);
         assert_eq!(report.pages_written, 1);
     }
@@ -580,11 +590,11 @@ mod tests {
         }
 
         // Build twice and compare outputs
-        let report1 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (report1, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
 
         // Clean and rebuild
         std::fs::remove_dir_all(dir.path().join("public")).unwrap();
-        let report2 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (report2, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
 
         assert_eq!(report1.total_pages, report2.total_pages);
         assert_eq!(report1.pages_written, report2.pages_written);
@@ -655,10 +665,10 @@ mod tests {
         std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nA").unwrap();
         std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nB").unwrap();
 
-        let r1 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (r1, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
         assert_eq!(r1.pages_written, 2);
 
-        let r2 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        let (r2, _) = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
         assert_eq!(r2.pages_written, 0);
         assert_eq!(r2.pages_unchanged, 2);
     }

@@ -1,8 +1,6 @@
 //! Content discovery — walks the content directory and builds Page structs.
 
 use anyhow::{Context, Result};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -17,7 +15,14 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
         return Ok(Vec::new());
     }
 
-    let mut pages = Vec::new();
+    // Pre-count files to avoid Vec resizing
+    let file_count = WalkDir::new(&content_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .count();
+
+    let mut pages = Vec::with_capacity(file_count);
 
     for entry in WalkDir::new(&content_dir)
         .into_iter()
@@ -42,8 +47,16 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read: {}", path.display()))?;
 
+        // Use ahash with fixed seeds for deterministic cross-build hashing
         let content_hash = {
-            let mut hasher = DefaultHasher::new();
+            use std::hash::{BuildHasher, Hash, Hasher};
+            let state = ahash::RandomState::with_seeds(
+                0x517cc1b727220a95,
+                0x6c62272e07bb0142,
+                0x2f8e4c5d6a3b1e09,
+                0x9d8c7b6a5f4e3d2c,
+            );
+            let mut hasher = state.build_hasher();
             raw.hash(&mut hasher);
             hasher.finish()
         };
@@ -286,7 +299,6 @@ mod tests {
 
     #[test]
     fn slug_preserves_underscores() {
-        // Zola issue #768: underscores in filenames should not become hyphens
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
@@ -311,11 +323,10 @@ mod tests {
 
     #[test]
     fn file_with_bom_marker_parsed() {
-        // Files saved with UTF-8 BOM should still parse
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        let mut bom_content = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        let mut bom_content = vec![0xEF, 0xBB, 0xBF];
         bom_content.extend_from_slice(b"# Hello BOM");
         std::fs::write(content.join("bom.md"), bom_content).unwrap();
 
@@ -324,11 +335,8 @@ mod tests {
         assert_eq!(pages.len(), 1);
     }
 
-    // --- Hugo regression tests ---
-
     #[test]
     fn content_with_frontmatter_only_produces_empty_body() {
-        // Hugo #11406: files with only frontmatter should have empty raw_content
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
@@ -342,7 +350,6 @@ mod tests {
 
     #[test]
     fn editor_temp_files_ignored() {
-        // Hugo #6773: editor backup files should not be discovered
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
@@ -359,23 +366,18 @@ mod tests {
 
     #[test]
     fn slug_strips_leading_trailing_hyphens() {
-        // Hugo #462: slugs from titles with special chars should not have leading/trailing hyphens
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
-        // File slug comes from filename, not title, so test the filename directly
         std::fs::write(content.join("--hello-world--.md"), "# Test").unwrap();
 
         let config = fixture_config();
         let pages = discover_content(&config, dir.path()).unwrap();
-        // The slug is derived from filename as-is (not slugified from title)
         assert_eq!(pages[0].slug, "--hello-world--");
-        // This documents current behavior — a future fix could strip leading/trailing hyphens
     }
 
     #[test]
     fn urls_use_forward_slashes() {
-        // Hugo #5515: generated slugs must use forward slashes even on Windows
         let dir = tempfile::tempdir().unwrap();
         let nested = dir.path().join("content/blog/post");
         std::fs::create_dir_all(&nested).unwrap();

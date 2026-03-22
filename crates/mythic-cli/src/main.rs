@@ -234,7 +234,7 @@ fn full_build(
 
     // --- Core build with integrated pipeline ---
 
-    let report = mythic_core::build::build_with_profile(
+    let (report, built_pages) = mythic_core::build::build_with_profile(
         site_config,
         root,
         drafts,
@@ -290,18 +290,15 @@ fn full_build(
 
     // --- Post-build: taxonomies, feeds, sitemap ---
 
-    // Post-build: only re-discover content if we need taxonomies, feeds, or sitemap
+    // Post-build: use the pages returned from build (no re-discovery needed)
     let needs_post_build = !site_config.taxonomies.is_empty()
         || site_config.feed.is_some()
         || site_config.sitemap.as_ref().map(|s| s.enabled).unwrap_or(true);
 
     if needs_post_build {
 
-    let all_pages = mythic_core::content::discover_content(site_config, root)?;
-    let non_draft_pages: Vec<_> = all_pages
-        .into_iter()
-        .filter(|p| !p.frontmatter.draft.unwrap_or(false) || drafts)
-        .collect();
+    // Pages are already filtered for drafts by the build pipeline
+    let non_draft_pages = built_pages;
 
     // Generate taxonomy pages
     if !site_config.taxonomies.is_empty() {
