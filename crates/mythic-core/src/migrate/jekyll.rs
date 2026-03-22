@@ -217,7 +217,9 @@ fn copy_static_assets(source: &Path, output: &Path, report: &mut MigrationReport
                     | "ttf"
                     | "eot"
             ) {
-                std::fs::create_dir_all(dest.parent().unwrap())?;
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
                 std::fs::copy(&src, &dest)?;
                 report.files_copied += 1;
             }

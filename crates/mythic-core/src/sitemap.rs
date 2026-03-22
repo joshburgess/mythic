@@ -53,7 +53,11 @@ fn generate_sitemap(
             continue;
         }
 
-        let url = format!("{base_url}/{}/", page.slug);
+        let url = if config.ugly_urls {
+            format!("{base_url}/{}.html", page.slug)
+        } else {
+            format!("{base_url}/{}/", page.slug)
+        };
         let lastmod = page.frontmatter.date.as_deref().unwrap_or("2024-01-01");
 
         xml.push_str("  <url>\n");

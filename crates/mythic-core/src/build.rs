@@ -199,7 +199,10 @@ where
     let write_errors: Vec<_> = to_write
         .par_iter()
         .filter_map(|job| {
-            let html = job.page.rendered_html.as_ref().unwrap();
+            let html = match job.page.rendered_html.as_ref() {
+                Some(h) => h,
+                None => return None, // skip pages with no rendered HTML
+            };
             if let Err(e) = std::fs::write(&job.file, html) {
                 return Some(e.into());
             }
