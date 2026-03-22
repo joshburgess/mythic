@@ -189,9 +189,12 @@ fn main() -> Result<()> {
             let report = match from.as_str() {
                 "jekyll" => mythic_core::migrate::jekyll::migrate(&source, &output)?,
                 "hugo" => mythic_core::migrate::hugo::migrate(&source, &output)?,
+                "hugo-theme" => mythic_core::migrate::hugo_theme::convert_theme(&source, &output)?,
                 "eleventy" | "11ty" => mythic_core::migrate::eleventy::migrate(&source, &output)?,
                 other => {
-                    anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy")
+                    anyhow::bail!(
+                        "Unknown source: {other}. Supported: jekyll, hugo, hugo-theme, eleventy"
+                    )
                 }
             };
             if !quiet {
