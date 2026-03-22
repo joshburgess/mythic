@@ -131,6 +131,7 @@ where
 
     let mut to_write: Vec<WriteJob> = Vec::new();
     let mut pages_unchanged = 0;
+    let ugly_urls = config.ugly_urls;
 
     for page in &pages {
         if page.rendered_html.is_none() {
@@ -138,7 +139,14 @@ where
         }
         if !cache.is_changed(&page.slug, page.content_hash) {
             pages_unchanged += 1;
+        } else if ugly_urls {
+            // Flat output: slug "blog/post" → output_dir/blog/post.html
+            // No per-page directory creation needed.
+            let file = output_dir.join(format!("{}.html", page.slug));
+            let dir = file.parent().unwrap_or(&output_dir).to_path_buf();
+            to_write.push(WriteJob { page, dir, file });
         } else {
+            // Clean URLs: slug "blog/post" → output_dir/blog/post/index.html
             let dir = output_dir.join(&page.slug);
             let file = dir.join("index.html");
             to_write.push(WriteJob { page, dir, file });
@@ -598,5 +606,75 @@ mod tests {
         let report = do_build(&config, dir.path());
         // The content hash should differ because the raw file changed
         assert_eq!(report.pages_written, 1, "Frontmatter change should trigger rebuild");
+    }
+
+    // --- ugly_urls (flat output) tests ---
+
+    #[test]
+    fn ugly_urls_produces_flat_html_files() {
+        let mut config = test_config();
+        config.ugly_urls = true;
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("about.md"), "---\ntitle: About\n---\nAbout page").unwrap();
+
+        build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+
+        // Should produce about.html, NOT about/index.html
+        let flat = dir.path().join("public/about.html");
+        assert!(flat.exists(), "Expected flat output: public/about.html");
+        assert!(!dir.path().join("public/about/index.html").exists());
+
+        let html = std::fs::read_to_string(flat).unwrap();
+        assert!(html.contains("About page"));
+    }
+
+    #[test]
+    fn ugly_urls_nested_paths() {
+        let mut config = test_config();
+        config.ugly_urls = true;
+        let dir = tempfile::tempdir().unwrap();
+        let nested = dir.path().join("content/blog/2024");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("post.md"), "---\ntitle: Post\n---\nDeep").unwrap();
+
+        build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+
+        let flat = dir.path().join("public/blog/2024/post.html");
+        assert!(flat.exists(), "Expected: public/blog/2024/post.html");
+    }
+
+    #[test]
+    fn ugly_urls_incremental_works() {
+        let mut config = test_config();
+        config.ugly_urls = true;
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("a.md"), "---\ntitle: A\n---\nA").unwrap();
+        std::fs::write(content.join("b.md"), "---\ntitle: B\n---\nB").unwrap();
+
+        let r1 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        assert_eq!(r1.pages_written, 2);
+
+        let r2 = build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+        assert_eq!(r2.pages_written, 0);
+        assert_eq!(r2.pages_unchanged, 2);
+    }
+
+    #[test]
+    fn clean_urls_still_default() {
+        let config = test_config();
+        assert!(!config.ugly_urls);
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("about.md"), "---\ntitle: About\n---\nAbout").unwrap();
+
+        build(&config, dir.path(), false, noop_render, None::<NoTemplate>).unwrap();
+
+        assert!(dir.path().join("public/about/index.html").exists());
+        assert!(!dir.path().join("public/about.html").exists());
     }
 }

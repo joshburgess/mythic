@@ -61,6 +61,11 @@ pub struct SiteConfig {
     pub templates: Option<TemplatesConfig>,
     #[serde(default)]
     pub i18n: Option<I18nConfig>,
+    /// If true, output `slug.html` instead of `slug/index.html`.
+    /// Eliminates per-page directory creation for faster builds.
+    /// Requires server-side URL rewriting for clean URLs.
+    #[serde(default)]
+    pub ugly_urls: bool,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -213,6 +218,7 @@ impl SiteConfig {
             sitemap: None,
             templates: None,
             i18n: None,
+            ugly_urls: false,
         }
     }
 }
