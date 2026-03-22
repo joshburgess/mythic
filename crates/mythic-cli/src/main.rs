@@ -565,47 +565,61 @@ fn full_build(
 
     // --- Post-build ---
 
-    let needs_post_build = !site_config.taxonomies.is_empty()
-        || site_config.feed.is_some()
-        || site_config
-            .sitemap
-            .as_ref()
-            .map(|s| s.enabled)
-            .unwrap_or(true);
+    let non_draft_pages = built_pages;
 
-    if needs_post_build {
-        let non_draft_pages = built_pages;
+    // Handle 404 page: if 404.md was built, copy its output to 404.html at root
+    // (most static hosts serve 404.html for missing routes)
+    let four_oh_four = output_dir.join("404/index.html");
+    if four_oh_four.exists() {
+        let html = std::fs::read_to_string(&four_oh_four)?;
+        std::fs::write(output_dir.join("404.html"), html)?;
+    }
 
-        if !site_config.taxonomies.is_empty() {
-            let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
-            let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
+    // Generate redirect pages from aliases
+    let redirect_count =
+        mythic_core::redirects::generate_redirects(&non_draft_pages, &output_dir, &site_config.base_url)?;
+    if redirect_count > 0 {
+        println!(
+            "  {} {} redirect(s)",
+            "Generated".dimmed(),
+            redirect_count
+        );
+    }
 
-            for mut page in taxonomy_pages {
-                page.rendered_html = Some(String::new());
-                match engine.render(&page, site_config) {
-                    Ok(html) => {
-                        let dest = output_dir.join(&page.slug).join("index.html");
-                        if let Some(parent) = dest.parent() {
-                            std::fs::create_dir_all(parent)?;
-                        }
-                        std::fs::write(&dest, html)?;
+    // Generate search index
+    mythic_core::search::generate_search_index(&non_draft_pages, &output_dir, &site_config.base_url)?;
+
+    // Generate taxonomy pages with pagination
+    if !site_config.taxonomies.is_empty() {
+        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
+        let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
+
+        for mut page in taxonomy_pages {
+            page.rendered_html = Some(String::new());
+            match engine.render(&page, site_config) {
+                Ok(html) => {
+                    let dest = output_dir.join(&page.slug).join("index.html");
+                    if let Some(parent) = dest.parent() {
+                        std::fs::create_dir_all(parent)?;
                     }
-                    Err(_) => {}
+                    std::fs::write(&dest, html)?;
                 }
+                Err(_) => {}
             }
-
-            mythic_core::feed::generate_feeds(
-                site_config,
-                &non_draft_pages,
-                &taxonomies,
-                &output_dir,
-            )?;
-        } else if site_config.feed.is_some() {
-            mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
         }
 
-        mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
+        mythic_core::feed::generate_feeds(
+            site_config,
+            &non_draft_pages,
+            &taxonomies,
+            &output_dir,
+        )?;
+    } else if site_config.feed.is_some() {
+        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
     }
+
+    // Generate sitemap and robots.txt
+    mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
 
     plugin_manager.run_post_build(&report)?;
 
