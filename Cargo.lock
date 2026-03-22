@@ -2044,6 +2044,7 @@ dependencies = [
  "anyhow",
  "handlebars",
  "mythic-core",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "tempfile",

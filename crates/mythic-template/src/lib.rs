@@ -98,6 +98,16 @@ impl TemplateEngine {
         tera.register_filter("reading_time", reading_time_filter);
         tera.register_filter("word_count", word_count_filter);
         tera.register_filter("truncate_words", truncate_words_filter);
+        // Hugo compatibility filters
+        tera.register_filter("markdownify", markdownify_filter);
+        tera.register_filter("plainify", plainify_filter);
+        tera.register_filter("humanize", humanize_filter);
+        tera.register_filter("pluralize", pluralize_filter);
+        tera.register_filter("singularize", singularize_filter);
+        tera.register_filter("urlize", urlize_filter);
+        tera.register_filter("safeHTML", safe_html_filter);
+        tera.register_filter("safeCSS", safe_html_filter);
+        tera.register_filter("safeJS", safe_html_filter);
 
         Ok(Self {
             tera,
@@ -277,6 +287,147 @@ fn truncate_words_filter(
         let truncated = words[..count].join(" ");
         Ok(tera::Value::String(format!("{truncated}...")))
     }
+}
+
+// --- Hugo compatibility filters ---
+
+/// Filter: `{{ text | markdownify }}` — render markdown to HTML inline.
+fn markdownify_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("markdownify", "value", String, value);
+    let mut opts = pulldown_cmark::Options::empty();
+    opts.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
+    let parser = pulldown_cmark::Parser::new_ext(&text, opts);
+    let mut html = String::new();
+    pulldown_cmark::html::push_html(&mut html, parser);
+    // Strip wrapping <p>...</p> for inline use
+    let trimmed = html.trim();
+    let result = if trimmed.starts_with("<p>")
+        && trimmed.ends_with("</p>")
+        && trimmed.matches("<p>").count() == 1
+    {
+        trimmed[3..trimmed.len() - 4].to_string()
+    } else {
+        html
+    };
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ html | plainify }}` — strip HTML tags, return plain text.
+fn plainify_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("plainify", "value", String, value);
+    let mut plain = String::new();
+    let mut in_tag = false;
+    for c in text.chars() {
+        if c == '<' {
+            in_tag = true;
+        } else if c == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            plain.push(c);
+        }
+    }
+    Ok(tera::Value::String(plain))
+}
+
+/// Filter: `{{ "my-slug" | humanize }}` → "My Slug"
+fn humanize_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("humanize", "value", String, value);
+    let result = text
+        .replace(['-', '_'], " ")
+        .split_whitespace()
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(c) => format!("{}{}", c.to_uppercase(), chars.collect::<String>()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ "post" | pluralize }}` → "posts"
+fn pluralize_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("pluralize", "value", String, value);
+    let result = if text.ends_with('s')
+        || text.ends_with("sh")
+        || text.ends_with("ch")
+        || text.ends_with('x')
+    {
+        format!("{text}es")
+    } else if text.ends_with('y')
+        && !text.ends_with("ey")
+        && !text.ends_with("ay")
+        && !text.ends_with("oy")
+    {
+        format!("{}ies", &text[..text.len() - 1])
+    } else {
+        format!("{text}s")
+    };
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ "posts" | singularize }}` → "post"
+fn singularize_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("singularize", "value", String, value);
+    let result = if text.ends_with("ies") {
+        format!("{}y", &text[..text.len() - 3])
+    } else if text.ends_with("ses")
+        || text.ends_with("shes")
+        || text.ends_with("ches")
+        || text.ends_with("xes")
+    {
+        text[..text.len() - 2].to_string()
+    } else if text.ends_with('s') && !text.ends_with("ss") {
+        text[..text.len() - 1].to_string()
+    } else {
+        text
+    };
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ "My Title" | urlize }}` → "my-title"
+fn urlize_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    let text = tera::try_get_value!("urlize", "value", String, value);
+    let result: String = text
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    Ok(tera::Value::String(result))
+}
+
+/// Filter: `{{ html | safeHTML }}` — mark content as safe (no escaping).
+/// This is a Hugo compatibility alias for Tera's built-in `| safe`.
+fn safe_html_filter(
+    value: &tera::Value,
+    _args: &std::collections::HashMap<String, tera::Value>,
+) -> tera::Result<tera::Value> {
+    // In Tera, `safe` is a built-in. This filter just passes through.
+    Ok(value.clone())
 }
 
 #[cfg(test)]
