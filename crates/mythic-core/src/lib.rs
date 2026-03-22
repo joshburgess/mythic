@@ -21,4 +21,5 @@ pub mod redirects;
 pub mod rhai_plugin;
 pub mod search;
 pub mod sitemap;
+pub mod summary;
 pub mod taxonomy;

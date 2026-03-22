@@ -91,6 +91,21 @@ enum Commands {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Delete the output directory
+    Clean {
+        /// Path to config file
+        #[arg(short, long, default_value = "mythic.toml")]
+        config: PathBuf,
+    },
+    /// List all content pages
+    List {
+        /// Path to config file
+        #[arg(short, long, default_value = "mythic.toml")]
+        config: PathBuf,
+        /// Include draft pages
+        #[arg(long)]
+        drafts: bool,
+    },
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
@@ -169,6 +184,53 @@ fn main() -> Result<()> {
             if !quiet {
                 print_migration_report(&report);
             }
+        }
+        Commands::Clean { config } => {
+            let site_config = mythic_core::config::load_config(&config)?;
+            let root = config.parent().unwrap_or_else(|| Path::new("."));
+            let output = root.join(&site_config.output_dir);
+            if output.exists() {
+                std::fs::remove_dir_all(&output)?;
+                if !quiet {
+                    println!("{} {}", "Cleaned".green().bold(), output.display());
+                }
+            } else if !quiet {
+                println!("  {} output directory does not exist", "note:".dimmed());
+            }
+        }
+        Commands::List { config, drafts } => {
+            let site_config = mythic_core::config::load_config(&config)?;
+            let root = config.parent().unwrap_or_else(|| Path::new("."));
+            let mut pages = mythic_core::content::discover_content(&site_config, root)?;
+            pages.sort_by(|a, b| a.slug.cmp(&b.slug));
+
+            for page in &pages {
+                let is_draft = page.frontmatter.draft.unwrap_or(false);
+                if is_draft && !drafts {
+                    continue;
+                }
+                let date = page.frontmatter.date.as_deref().unwrap_or("          ");
+                let draft_marker = if is_draft {
+                    format!(" {}", "[draft]".yellow())
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {} {} {}{}",
+                    date.dimmed(),
+                    page.slug.bold(),
+                    page.frontmatter.title.dimmed(),
+                    draft_marker,
+                );
+            }
+            println!(
+                "\n  {} pages{}",
+                pages
+                    .iter()
+                    .filter(|p| drafts || !p.frontmatter.draft.unwrap_or(false))
+                    .count(),
+                if drafts { " (including drafts)" } else { "" },
+            );
         }
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
@@ -500,6 +562,9 @@ fn full_build(
             if let Err(e) = plugin_manager.run_all_discovered(pages) {
                 eprintln!("  {} {e}", "plugin error:".red());
             }
+
+            // Extract content summaries (<!--more--> marker or auto-truncate)
+            mythic_core::summary::extract_summaries(pages);
 
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
