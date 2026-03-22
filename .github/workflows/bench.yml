@@ -1,0 +1,180 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Benchmark (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release -p mythic-cli
+
+      - name: Generate benchmark sites
+        run: |
+          cargo run --release -p mythic-cli -- init /tmp/bench-1k --template blank
+          # Generate 1k pages
+          for i in $(seq 1 1000); do
+            m=$(printf '%02d' $(( (i % 12) + 1 )))
+            d=$(printf '%02d' $(( (i % 28) + 1 )))
+            cat > "/tmp/bench-1k/content/post-${i}.md" << EOF
+          ---
+          title: "Post ${i}"
+          date: "2024-${m}-${d}"
+          ---
+          # Post ${i}
+
+          Paragraph with **bold** and *italic* and a [link](https://example.com).
+
+          ## Section
+
+          - Item one
+          - Item two
+
+          \`\`\`rust
+          fn main() { println!("Hello"); }
+          \`\`\`
+          EOF
+          done
+
+      - name: "Benchmark: 1k cold build (5 runs)"
+        run: |
+          echo "=== 1,000 Pages Cold Build ==="
+          for i in 1 2 3 4 5; do
+            ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean 2>&1 | grep "Built"
+          done
+
+      - name: "Benchmark: 1k incremental (5 runs)"
+        run: |
+          echo "=== 1,000 Pages Incremental ==="
+          ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean > /dev/null 2>&1
+          for i in 1 2 3 4 5; do
+            ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml 2>&1 | grep "Built"
+          done
+
+      - name: "Benchmark: 1k profiled build"
+        run: |
+          echo "=== Pipeline Profile ==="
+          ./target/release/mythic-cli build --config /tmp/bench-1k/mythic.toml --clean --profile 2>&1
+
+      - name: Run Criterion benchmarks
+        run: cargo bench -p mythic-core 2>&1 | grep -E "^(full_build|incremental|markdown)" || true
+
+  compare:
+    name: Compare with Hugo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Hugo
+        run: |
+          wget -q https://github.com/gohugoio/hugo/releases/latest/download/hugo_extended_Linux-64bit.tar.gz -O /tmp/hugo.tar.gz
+          tar xzf /tmp/hugo.tar.gz -C /usr/local/bin hugo
+          hugo version
+
+      - name: Build Mythic
+        run: cargo build --release -p mythic-cli
+
+      - name: Generate identical test sites
+        run: |
+          PAGES=1000
+
+          # Mythic site
+          ./target/release/mythic-cli init /tmp/bench-mythic --template blank
+          for i in $(seq 1 $PAGES); do
+            m=$(printf '%02d' $(( (i % 12) + 1 )))
+            d=$(printf '%02d' $(( (i % 28) + 1 )))
+            cat > "/tmp/bench-mythic/content/post-${i}.md" << EOF
+          ---
+          title: "Post ${i}"
+          date: "2024-${m}-${d}"
+          ---
+          # Post ${i}
+
+          Paragraph with **bold** and *italic* and a [link](https://example.com).
+
+          ## Section
+
+          - Item one
+          - Item two
+
+          \`\`\`rust
+          fn main() { println!("Hello"); }
+          \`\`\`
+          EOF
+          done
+
+          # Hugo site
+          mkdir -p /tmp/bench-hugo/layouts/_default /tmp/bench-hugo/content/posts
+          cat > /tmp/bench-hugo/hugo.toml << 'EOF'
+          baseURL = "http://localhost"
+          title = "Bench"
+          EOF
+          cat > /tmp/bench-hugo/layouts/_default/baseof.html << 'LAYOUT'
+          <!DOCTYPE html><html><head><title>{{ .Title }}</title></head><body>{{ block "main" . }}{{ end }}</body></html>
+          LAYOUT
+          cat > /tmp/bench-hugo/layouts/_default/single.html << 'LAYOUT'
+          {{ define "main" }}<article><h1>{{ .Title }}</h1>{{ .Content }}</article>{{ end }}
+          LAYOUT
+          cat > /tmp/bench-hugo/layouts/_default/list.html << 'LAYOUT'
+          {{ define "main" }}{{ range .Pages }}<a href="{{ .Permalink }}">{{ .Title }}</a>{{ end }}{{ end }}
+          LAYOUT
+          for i in $(seq 1 $PAGES); do
+            m=$(printf '%02d' $(( (i % 12) + 1 )))
+            d=$(printf '%02d' $(( (i % 28) + 1 )))
+            cat > "/tmp/bench-hugo/content/posts/post-${i}.md" << EOF
+          ---
+          title: "Post ${i}"
+          date: "2024-${m}-${d}"
+          ---
+          # Post ${i}
+
+          Paragraph with **bold** and *italic* and a [link](https://example.com).
+
+          ## Section
+
+          - Item one
+          - Item two
+
+          \`\`\`rust
+          fn main() { println!("Hello"); }
+          \`\`\`
+          EOF
+          done
+
+      - name: "Comparison: Cold build (5 runs each)"
+        run: |
+          echo "=== Mythic ==="
+          for i in 1 2 3 4 5; do
+            ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml --clean 2>&1 | grep "Built"
+          done
+          echo ""
+          echo "=== Hugo ==="
+          for i in 1 2 3 4 5; do
+            hugo --source /tmp/bench-hugo --cleanDestinationDir 2>&1 | grep "Total"
+          done
+
+      - name: "Comparison: Incremental (5 runs each)"
+        run: |
+          echo "=== Mythic (incremental) ==="
+          ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml --clean > /dev/null 2>&1
+          for i in 1 2 3 4 5; do
+            ./target/release/mythic-cli build --config /tmp/bench-mythic/mythic.toml 2>&1 | grep "Built"
+          done
