@@ -98,6 +98,10 @@ Or override it in the workflow:
     args: "--base-url https://username.github.io/repo-name"
 ```
 
+## Custom 404 Page
+
+If your site includes a `content/404.md` file, Mythic automatically renders it as `404.html` in the build output. GitHub Pages serves this file whenever a visitor requests a path that does not exist, so you get a branded error page with no extra configuration.
+
 ## Custom Domains
 
 ### Setting Up a Custom Domain

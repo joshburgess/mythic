@@ -160,13 +160,15 @@ categories:
 **Type:** List of Strings
 **Required:** No
 
-Creates redirect pages from old URLs to this page. Useful when you change URL structures:
+Creates redirect pages from old URLs to this page. Useful when you restructure your site or rename content. For each alias, Mythic generates an HTML file at that path containing a `<meta http-equiv="refresh">` redirect and a canonical link pointing to the current page.
 
 ```yaml
 aliases:
   - /old-url/
   - /another-old-path/post-name/
 ```
+
+For example, if a page lives at `/blog/new-slug/` and has the aliases above, visiting `/old-url/` will automatically redirect the browser to `/blog/new-slug/`. This is especially helpful for preserving inbound links and search engine rankings after reorganizing content.
 
 ### description
 
@@ -192,7 +194,7 @@ template_engine: handlebars
 
 ## Sitemap Fields
 
-Control how this page appears in the generated sitemap:
+The `sitemap` field lets you control how an individual page appears in the generated `sitemap.xml`. These per-page values override the global defaults set in `mythic.toml` under `[sitemap]`.
 
 ```yaml
 sitemap:
@@ -203,15 +205,15 @@ sitemap:
 
 ### sitemap.changefreq
 
-How frequently the page is likely to change. Values: `always`, `hourly`, `daily`, `weekly`, `monthly`, `yearly`, `never`.
+How frequently the page is likely to change. Values: `always`, `hourly`, `daily`, `weekly`, `monthly`, `yearly`, `never`. If omitted, the value falls back to the global `[sitemap] changefreq` setting (default: `weekly`).
 
 ### sitemap.priority
 
-The priority of this page relative to other pages on your site. A value between `0.0` and `1.0`. Default is `0.5`.
+The priority of this page relative to other pages on your site. A value between `0.0` and `1.0`. Default is `0.5`. Higher values suggest greater importance to search engine crawlers, though crawlers may interpret this differently.
 
 ### sitemap.disable
 
-Set to `true` to exclude this page from the sitemap entirely.
+Set to `true` to exclude this page from the sitemap entirely. This is useful for utility pages, landing page variants, or any page you do not want indexed.
 
 ## Locale
 

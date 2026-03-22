@@ -78,7 +78,21 @@ mythic serve --host 0.0.0.0
 
 ## Step 3: Create Content
 
-Create a new Markdown file in the `content/` directory:
+The fastest way to create a new content file is with the `mythic new post` command:
+
+```bash
+mythic new post "My First Post"
+```
+
+This generates a file at `content/my-first-post.md` with pre-filled frontmatter (title, date, and draft status). You can also specify a section:
+
+```bash
+mythic new post "My First Post" --section blog
+```
+
+This creates `content/blog/my-first-post.md` instead. The `--section` flag creates the directory if it does not already exist.
+
+Alternatively, you can create content files by hand. Create a new Markdown file in the `content/` directory:
 
 ```bash
 mkdir -p content/blog
