@@ -314,6 +314,131 @@ Pages grouped by their top-level directory. For example, pages in `content/blog/
 {% endfor %}
 ```
 
+## SRI Integrity Hashes
+
+The `assets` object also provides Subresource Integrity hashes for your CSS and JavaScript files, allowing browsers to verify that fetched resources have not been tampered with.
+
+| Variable                     | Type   | Description                                    |
+|------------------------------|--------|------------------------------------------------|
+| `assets.css_integrity`       | String | SHA-384 integrity hash of the compiled CSS     |
+| `assets.js_integrity`        | String | SHA-384 integrity hash of the bundled JS       |
+
+```html
+<link rel="stylesheet"
+      href="{{ assets.css }}"
+      integrity="{{ assets.css_integrity }}"
+      crossorigin="anonymous">
+
+<script src="{{ assets.js }}"
+        integrity="{{ assets.js_integrity }}"
+        crossorigin="anonymous"
+        defer></script>
+```
+
+See [SEO](/features/seo/) for more details on SRI and other security features.
+
+## Render Hooks
+
+Mythic supports render hooks that let you customize how images and links are rendered in your Markdown content. Define hook templates that override the default HTML output.
+
+### Image Render Hook
+
+Create `templates/render/image.tera.html` to customize image rendering:
+
+```html
+{# templates/render/image.tera.html #}
+<figure>
+  <img src="{{ src }}" alt="{{ alt }}" loading="lazy">
+  {% if alt %}
+  <figcaption>{{ alt }}</figcaption>
+  {% endif %}
+</figure>
+```
+
+Available variables in the image render hook:
+
+| Variable | Type   | Description                        |
+|----------|--------|------------------------------------|
+| `src`    | String | The image source URL               |
+| `alt`    | String | The alt text from Markdown         |
+| `title`  | String | The optional title attribute       |
+
+### Link Render Hook
+
+Create `templates/render/link.tera.html` to customize link rendering:
+
+```html
+{# templates/render/link.tera.html #}
+{% if src is starting_with("http") %}
+<a href="{{ src }}" target="_blank" rel="noopener noreferrer">{{ text }}</a>
+{% else %}
+<a href="{{ src }}">{{ text }}</a>
+{% endif %}
+```
+
+Available variables in the link render hook:
+
+| Variable | Type   | Description                        |
+|----------|--------|------------------------------------|
+| `src`    | String | The link URL                       |
+| `text`   | String | The link text content              |
+| `title`  | String | The optional title attribute       |
+
+## Related Content
+
+Mythic can suggest related content for each page based on shared tags and categories. Related pages are available in templates:
+
+```html
+{% if page.related %}
+<aside>
+  <h2>Related Posts</h2>
+  <ul>
+    {% for related in page.related %}
+    <li><a href="{{ related.path }}">{{ related.title }}</a></li>
+    {% endfor %}
+  </ul>
+</aside>
+{% endif %}
+```
+
+Each item in `page.related` has the same fields as a regular page object (`title`, `path`, `date`, `tags`, etc.). Mythic scores relatedness by counting shared taxonomy terms and returns the top matches.
+
+## Remote Data
+
+The `data.remote` object provides access to data fetched from external URLs, configured via `[[remote]]` in `mythic.toml`. Remote data is fetched at build time and cached based on its TTL.
+
+```toml
+# mythic.toml
+[[remote]]
+name = "github_repos"
+url = "https://api.github.com/users/myuser/repos"
+ttl = 3600
+
+[[remote]]
+name = "quotes"
+url = "https://api.example.com/quotes.json"
+ttl = 86400
+```
+
+Access remote data in templates:
+
+```html
+{% for repo in data.remote.github_repos %}
+<a href="{{ repo.html_url }}">{{ repo.name }}</a>
+<p>{{ repo.description }}</p>
+{% endfor %}
+
+{% for quote in data.remote.quotes %}
+<blockquote>{{ quote.text }} &mdash; {{ quote.author }}</blockquote>
+{% endfor %}
+```
+
+| Variable               | Type   | Description                                  |
+|------------------------|--------|----------------------------------------------|
+| `data.remote.<name>`   | Object | Parsed JSON response from the remote URL     |
+
+The `ttl` (time to live) is in seconds. During the TTL window, Mythic serves the cached response instead of making a new HTTP request. Set `ttl = 0` to fetch on every build.
+
 ## Build JSON Output
 
 Use `mythic build --json` for structured output in CI:

@@ -281,6 +281,91 @@ reading_time = true       # Runs first, adds word_count
 path = "plugins/cost.rhai"
 ```
 
+## Computed Frontmatter
+
+Mythic supports computed frontmatter fields using inline Rhai expressions. This lets you derive page metadata from other fields without writing a full plugin.
+
+### Syntax
+
+In your page frontmatter, set a field under `extra` to a string prefixed with `rhai:`:
+
+```yaml
+---
+title: "My Long Article"
+date: 2026-03-15
+extra:
+  reading_time: "rhai: (word_count + 199) / 200"
+  is_long: "rhai: word_count > 2000"
+  upper_slug: "rhai: slug.to_upper()"
+---
+```
+
+When Mythic processes the page, it evaluates each `rhai:` expression and replaces the string with the computed result.
+
+### Available Variables
+
+The following variables are available inside computed frontmatter expressions:
+
+| Variable     | Type    | Description                                |
+|--------------|---------|--------------------------------------------|
+| `word_count` | Integer | Number of words in the page content        |
+| `slug`       | String  | The URL slug of the page                   |
+| `title`      | String  | The page title from frontmatter            |
+| `date`       | String  | The date as an ISO 8601 string, or `""`    |
+| `has_date`   | Boolean | Whether the page has a date set            |
+
+### Examples
+
+#### Reading Time
+
+```yaml
+extra:
+  reading_time: "rhai: (word_count + 199) / 200"
+```
+
+This calculates reading time assuming 200 words per minute, rounding up.
+
+#### Long Content Flag
+
+```yaml
+extra:
+  is_long: "rhai: word_count > 2000"
+```
+
+Use this in templates to conditionally show a table of contents or a progress bar:
+
+```html
+{% if page.extra.is_long %}
+<nav class="toc">{{ toc | safe }}</nav>
+{% endif %}
+```
+
+#### Slug Transformations
+
+```yaml
+extra:
+  upper_slug: "rhai: slug.to_upper()"
+  slug_with_prefix: "rhai: \"post-\" + slug"
+```
+
+#### Conditional Date Display
+
+```yaml
+extra:
+  show_date: "rhai: has_date"
+  date_label: "rhai: if has_date { \"Published: \" + date } else { \"Undated\" }"
+```
+
+### Error Handling
+
+If a computed frontmatter expression contains a syntax error or fails at runtime, Mythic emits a warning but does not fail the build. The field is left as the raw string (including the `rhai:` prefix) so you can spot it in the rendered output.
+
+```
+  Warning: content/blog/my-post.md: computed field "reading_time" failed: variable 'word_countt' not found
+```
+
+This ensures that a typo in one expression does not prevent the rest of your site from building.
+
 ## Plugin API Reference
 
 ### Page Object

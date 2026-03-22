@@ -266,6 +266,30 @@ Output:
 
 This helps verify that Mythic is picking up all your content files and generating the expected URL paths.
 
+### mythic watch
+
+Watch for file changes and rebuild automatically without starting a dev server. This is useful when you have your own server setup or just want to trigger rebuilds on save:
+
+```bash
+mythic watch
+```
+
+Output:
+
+```
+  Watching for changes...
+  [14:32:05] content/blog/first-post.md changed, rebuilding...
+  [14:32:05] Rebuilt in 24ms
+```
+
+The `watch` command monitors the same directories as `mythic serve` (content, templates, styles, scripts, data, and static files) but does not start an HTTP server or inject live reload scripts. Combine it with any external server or file sync tool.
+
+To include drafts in watch rebuilds:
+
+```bash
+mythic watch --drafts
+```
+
 ## Next Steps
 
 - Learn about the [Project Structure](/getting-started/project-structure/) in detail

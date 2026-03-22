@@ -252,6 +252,106 @@ You can also provide a custom TextMate `.tmTheme` file:
 syntax_theme_path = "themes/custom.tmTheme"
 ```
 
+## Math Rendering
+
+Mythic supports mathematical notation using KaTeX syntax. You can write inline math, display math, and math code blocks.
+
+### Inline Math
+
+Wrap expressions in single dollar signs for inline math:
+
+```markdown
+The quadratic formula is $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$ and is used to solve quadratic equations.
+```
+
+This renders the formula inline with the surrounding text.
+
+### Display Math
+
+Use double dollar signs for display (block-level) math:
+
+```markdown
+$$
+\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+$$
+```
+
+Display math is centered on its own line and can span multiple lines.
+
+### Math Code Blocks
+
+You can also use fenced code blocks with the `math` language identifier:
+
+````markdown
+```math
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+```
+````
+
+Math code blocks behave the same as display math but are easier to read in the source Markdown for longer expressions.
+
+### KaTeX Head Tags
+
+To enable client-side math rendering, add the KaTeX CSS and JavaScript to the `<head>` section of your base template:
+
+```html
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+      crossorigin="anonymous">
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+        crossorigin="anonymous"></script>
+<script defer
+        src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        crossorigin="anonymous"
+        onload="renderMathInElement(document.body);"></script>
+```
+
+The `auto-render` extension automatically finds and renders all math delimiters on the page.
+
+## Admonitions
+
+Mythic supports GitHub-style admonitions (also called callouts or alerts). Use blockquote syntax with a type marker on the first line:
+
+```markdown
+> [!NOTE]
+> This is a note with additional context that readers might find helpful.
+
+> [!WARNING]
+> Be careful when modifying this configuration. Incorrect values may
+> cause build failures.
+
+> [!TIP]
+> You can speed up builds by enabling parallel processing in mythic.toml.
+
+> [!IMPORTANT]
+> This step is required before proceeding to the next section.
+
+> [!CAUTION]
+> This action is irreversible. Make sure you have a backup before continuing.
+```
+
+### Supported Types
+
+| Type          | Purpose                                         |
+|---------------|--------------------------------------------------|
+| `[!NOTE]`     | Additional information or context                |
+| `[!TIP]`      | Helpful suggestions or best practices            |
+| `[!IMPORTANT]`| Critical information the reader should not miss  |
+| `[!WARNING]`  | Potential issues or things to be cautious about  |
+| `[!CAUTION]`  | Actions that could have negative consequences    |
+
+Each admonition type renders with a distinct color and icon. The generated HTML uses a `<div>` with a class matching the type:
+
+```html
+<div class="admonition admonition-warning">
+  <p class="admonition-title">Warning</p>
+  <p>Be careful when modifying this configuration.</p>
+</div>
+```
+
+You can style admonitions in your CSS using the `.admonition` and `.admonition-warning` (or other type) classes.
+
 ## Content Summaries
 
 Use the `<!--more-->` marker to split content into a summary and full body:

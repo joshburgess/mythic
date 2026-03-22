@@ -1,36 +1,81 @@
-# Mythic — Next Steps
+# Mythic — Status
 
-## Hygiene (quick wins)
+## Completed
 
-- [x] Fix all clippy warnings (15 warnings)
-- [x] Run `cargo fmt --all` to fix formatting drift
-- [x] Add LICENSE file (MIT)
-- [x] Add CHANGELOG.md
+### Core Build Pipeline
+- [x] Content discovery, frontmatter parsing (YAML/TOML), markdown rendering, template application
+- [x] Incremental builds with content-hash caching
+- [x] Parallel rendering and file output
+- [x] Clean URLs and flat URL mode (`ugly_urls`)
+- [x] Draft filtering with `--drafts` flag
 
-## User Experience
+### Content Features
+- [x] Syntax highlighting (syntect, configurable themes)
+- [x] Shortcodes (self-closing + paired, code block protection)
+- [x] Table of contents extraction
+- [x] Content summaries (`<!--more-->` marker)
+- [x] Admonitions (`> [!NOTE]`, `> [!WARNING]`, etc.)
+- [x] Math rendering (inline/display/code blocks, KaTeX)
+- [x] Markdown render hooks (customizable link/image output)
 
-- [ ] **Colored CLI output** — use `colored` or `owo-colors` for errors (red), warnings (yellow), success (green), and build summaries
-- [ ] **`mythic new` command** — `mythic new post "My Title"` creates `content/posts/my-title.md` with frontmatter scaffold (title, date, draft: true)
-- [ ] **`--verbose` flag** — show each file being processed, template applied, output written
-- [ ] **Friendly template errors** — catch Tera/Handlebars errors and reformat with the template filename, line number, and a suggestion instead of raw stack traces
-- [ ] **Config validation** — warn on unrecognized keys in `mythic.toml` (catches typos like `titl` or `base-url`). Use `serde(deny_unknown_fields)` or a validation pass.
-- [ ] **Bundle starters in binary** — embed starter templates via `include_dir` or `rust-embed` so `mythic init --template blog` works from an installed binary, not just from the workspace
+### Data & Templates
+- [x] Data files (`_data/` YAML/TOML/JSON with nested namespaces)
+- [x] Directory data cascade (`_dir.yaml`)
+- [x] Content collections (`{{ data.pages }}`, `{{ data.sections }}`)
+- [x] Multi-engine templates (Tera + Handlebars)
+- [x] Custom Tera filters (reading_time, word_count, truncate_words)
+- [x] Computed frontmatter (Rhai expressions)
+- [x] Remote data fetching with caching
 
-## Missing Features
+### Taxonomies & Feeds
+- [x] Tags, categories, custom taxonomies with pagination
+- [x] Atom, RSS 2.0, and JSON Feed 1.1 generation
+- [x] Related content engine
 
-- [x] **Pagination** — `mythic_core::pagination::paginate()` with Paginator context (pages, current_page, total_pages, prev_url, next_url)
-- [x] **Search index** — generates `search-index.json` with title, slug, url, summary, tags for client-side search
-- [x] **404 page** — `content/404.md` renders as both `public/404/index.html` and `public/404.html`
-- [x] **Redirects / aliases** — frontmatter `aliases: ["/old-url/"]` generates HTML redirect files with meta refresh and canonical link
+### SEO & Quality
+- [x] Sitemap.xml and robots.txt
+- [x] Schema.org JSON-LD auto-generation
+- [x] SRI integrity hashes for assets
+- [x] Content linting (word counts, required fields, orphan detection)
+- [x] Accessibility auditing (WCAG checks at build time)
+- [x] Link checker with heading hierarchy validation
+- [x] Smart content diffing with deploy manifests
 
-## Robustness
+### Other Features
+- [x] Search index (JSON) for client-side search
+- [x] Pagination
+- [x] 404 page handling
+- [x] Redirects/aliases
+- [x] Custom output formats (JSON API)
+- [x] i18n (locale dirs, hreflang, translations)
+- [x] Plugin system (Rust hooks + Rhai scripting)
+- [x] Migration tools (Jekyll, Hugo, Eleventy)
 
-- [x] **Strip XML control characters in feeds** — strip characters outside the XML 1.0 valid range before writing feed output
-- [x] **Graceful template errors in `serve`** — build errors during dev server rebuild are sent to the browser via WebSocket and displayed as a fixed error overlay
-- [ ] **Concurrent build safety** — audit all shared mutable state in the rayon parallel sections. The current code is safe (tested with Hugo regression test #3013) but has no formal proof or `loom` testing
+### CLI
+- [x] `mythic init` with embedded starters (blank, blog, docs, portfolio, minimal)
+- [x] `mythic new` content scaffolding
+- [x] `mythic build` with --clean, --drafts, --profile, --quiet, --json
+- [x] `mythic serve` with live reload, error overlay, draft hints
+- [x] `mythic watch` rebuild-only mode
+- [x] `mythic check` link/a11y validation
+- [x] `mythic list` page listing
+- [x] `mythic clean` output cleanup
+- [x] `mythic migrate` from Jekyll/Hugo/Eleventy
+- [x] `mythic completions` for bash/zsh/fish/powershell
+- [x] `--version`, `--quiet` global flags
+- [x] Colored output, config validation, friendly errors
 
-## Performance (future)
+### Quality
+- [x] 433 tests (including regression tests from Hugo/Zola)
+- [x] Zero clippy warnings
+- [x] Zero production unwrap() calls
+- [x] LICENSE, CHANGELOG, CONTRIBUTING, BENCHMARKS
+- [x] CI workflows (test, clippy, fmt, build, docs, benchmark)
+- [x] Release workflow (6 platform targets)
+- [x] Cargo publish metadata
 
-- [ ] **Arena allocator for frontmatter** — replace per-page heap allocations with a bump allocator (`bumpalo`). Would require `Frontmatter<'arena>` and `Page<'arena>` lifetime parameters, rippling through the entire codebase. Expected impact: ~10-15ms on discovery (currently 147ms). Should be attempted on a feature branch due to the invasive type changes. See BENCHMARKS.md for design notes.
-- [ ] **io_uring on Linux** — batch file create/write operations into kernel submission queues. Could reduce the output stage from 1,534ms to ~300-500ms on Linux. Platform-specific, requires `io-uring` crate and conditional compilation.
-- [ ] **PGO (profile-guided optimization)** — two-pass compilation trained on the 10k benchmark workload. Expected 10-20% overall improvement. Requires CI integration for the profiling pass.
+## Future (performance, feature branch)
+- [ ] Arena allocator for frontmatter (bumpalo)
+- [ ] io_uring on Linux
+- [ ] Profile-guided optimization (PGO)
+- [ ] Visual regression testing (requires headless browser)
