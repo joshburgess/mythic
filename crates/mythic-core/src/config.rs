@@ -200,7 +200,7 @@ impl SiteConfig {
     /// Create a config suitable for tests.
     pub fn for_testing(title: &str, base_url: &str) -> Self {
         SiteConfig {
-            title: title.to_string(),
+            title: title.into(),
             base_url: base_url.to_string(),
             content_dir: default_content_dir(),
             output_dir: default_output_dir(),

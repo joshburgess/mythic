@@ -186,7 +186,7 @@ mod tests {
             source_path: std::path::PathBuf::from("test.md"),
             slug: "test".to_string(),
             frontmatter: mythic_core::page::Frontmatter {
-                title: "Test".to_string(),
+                title: "Test".into(),
                 ..Default::default()
             },
             raw_content: "## Section A\n\nText\n\n## Section B\n\nMore text".to_string(),
@@ -209,7 +209,7 @@ mod tests {
             source_path: std::path::PathBuf::from("test.md"),
             slug: "test".to_string(),
             frontmatter: mythic_core::page::Frontmatter {
-                title: "Test".to_string(),
+                title: "Test".into(),
                 ..Default::default()
             },
             raw_content: raw_content.to_string(),

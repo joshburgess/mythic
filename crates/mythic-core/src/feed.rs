@@ -192,12 +192,12 @@ mod tests {
             source_path: PathBuf::from(format!("{slug}.md")),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: title.to_string(),
-                date: Some(date.to_string()),
+                title: title.into(),
+                date: Some(date.into()),
                 tags: if tags.is_empty() {
                     None
                 } else {
-                    Some(tags.into_iter().map(String::from).collect())
+                    Some(tags.into_iter().map(compact_str::CompactString::from).collect())
                 },
                 ..Default::default()
             },
@@ -212,7 +212,7 @@ mod tests {
     fn feed_config() -> SiteConfig {
         let mut config = SiteConfig::for_testing("Test Site", "http://example.com");
         config.feed = Some(FeedConfig {
-            title: "Test Feed".to_string(),
+            title: "Test Feed".into(),
             author: Some("Test Author".to_string()),
             entries: 20,
         });
@@ -308,7 +308,7 @@ mod tests {
             source_path: PathBuf::from("nodates.md"),
             slug: "nodates".to_string(),
             frontmatter: Frontmatter {
-                title: "No Date".to_string(),
+                title: "No Date".into(),
                 date: None,
                 ..Default::default()
             },

@@ -241,7 +241,7 @@ mod tests {
             source_path: PathBuf::from(format!("{slug}.md")),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: "Test".to_string(),
+                title: "Test".into(),
                 ..Default::default()
             },
             raw_content: content.to_string(),
@@ -301,7 +301,7 @@ mod tests {
         }
 
         fn on_page_discovered(&self, page: &mut Page) -> Result<()> {
-            page.frontmatter.title = "Mutated".to_string();
+            page.frontmatter.title = "Mutated".into();
             Ok(())
         }
     }

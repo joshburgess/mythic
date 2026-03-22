@@ -100,7 +100,7 @@ fn run_hook(engine: &Engine, ast: &AST, hook_name: &str, page: &mut Page, script
     if let Some(updated) = result.try_cast::<rhai::Map>() {
         if let Some(title) = updated.get("title") {
             if let Some(s) = title.clone().into_string().ok() {
-                page.frontmatter.title = s;
+                page.frontmatter.title = s.into();
             }
         }
 
@@ -209,7 +209,7 @@ mod tests {
             source_path: PathBuf::from("test.md"),
             slug: "test".to_string(),
             frontmatter: Frontmatter {
-                title: "Test Page".to_string(),
+                title: "Test Page".into(),
                 ..Default::default()
             },
             raw_content: content.to_string(),

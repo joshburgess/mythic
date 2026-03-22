@@ -98,8 +98,8 @@ mod tests {
             source_path: PathBuf::from(format!("{slug}.md")),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: slug.to_string(),
-                date: Some(date.to_string()),
+                title: slug.into(),
+                date: Some(date.into()),
                 ..Default::default()
             },
             raw_content: String::new(),

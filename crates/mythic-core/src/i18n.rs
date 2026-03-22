@@ -78,7 +78,7 @@ pub fn process_i18n(
     // Detect locale from directory structure or frontmatter
     for page in pages.iter_mut() {
         let locale = detect_locale(page, config);
-        page.frontmatter.locale = Some(locale);
+        page.frontmatter.locale = Some(locale.into());
     }
 
     // Adjust slugs for non-default locales
@@ -98,8 +98,9 @@ pub fn process_i18n(
 fn detect_locale(page: &Page, config: &I18nConfig) -> String {
     // Check frontmatter first
     if let Some(ref locale) = page.frontmatter.locale {
-        if config.locales.contains(locale) {
-            return locale.clone();
+        let locale_str = locale.as_str();
+        if config.locales.iter().any(|l| l == locale_str) {
+            return locale_str.to_string();
         }
     }
 
@@ -190,8 +191,8 @@ mod tests {
             source_path: PathBuf::from(format!("{slug}.md")),
             slug: slug.to_string(),
             frontmatter: Frontmatter {
-                title: slug.to_string(),
-                locale: locale.map(String::from),
+                title: slug.into(),
+                locale: locale.map(compact_str::CompactString::from),
                 ..Default::default()
             },
             raw_content: String::new(),

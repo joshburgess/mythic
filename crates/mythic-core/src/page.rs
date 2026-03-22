@@ -3,7 +3,11 @@
 //! A [`Page`] flows through the pipeline stages: discovery → frontmatter parsing →
 //! markdown rendering → template application → file output. Fields are progressively
 //! populated at each stage.
+//!
+//! [`Frontmatter`] uses [`CompactString`] for short string fields (title, date,
+//! layout, tags, locale) to avoid heap allocation for values ≤24 bytes.
 
+use compact_str::CompactString;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -54,6 +58,10 @@ pub struct TocEntry {
 /// Supports both YAML (`---` delimiters) and TOML (`+++` delimiters).
 /// Only `title` is required; all other fields are optional with sensible defaults.
 ///
+/// Short string fields use `CompactString` which stores values ≤24 bytes
+/// inline (no heap allocation). Most frontmatter values — layout names,
+/// dates, short tags, locale codes — fit within this threshold.
+///
 /// # Example (YAML)
 ///
 /// ```yaml
@@ -72,20 +80,20 @@ pub struct TocEntry {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Frontmatter {
     /// Page title (required).
-    pub title: String,
+    pub title: CompactString,
     /// Publication date as a string (e.g., `"2024-01-15"`).
     #[serde(default)]
-    pub date: Option<String>,
+    pub date: Option<CompactString>,
     /// If `true`, the page is excluded from builds (unless `--drafts` is passed).
     #[serde(default)]
     pub draft: Option<bool>,
     /// Template layout name. Defaults to `"default"`.
     /// Maps to `{layout}.html` (Tera) or `{layout}.hbs` (Handlebars).
     #[serde(default = "default_layout")]
-    pub layout: Option<String>,
+    pub layout: Option<CompactString>,
     /// Tag list for taxonomy classification.
     #[serde(default)]
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<Vec<CompactString>>,
     /// Arbitrary key-value metadata, accessible in templates as `{{ page.extra.key }}`.
     #[serde(default)]
     pub extra: Option<HashMap<String, serde_json::Value>>,
@@ -95,9 +103,9 @@ pub struct Frontmatter {
     /// Locale code for i18n (e.g., `"en"`, `"es"`).
     /// Can also be inferred from the content directory structure.
     #[serde(default)]
-    pub locale: Option<String>,
+    pub locale: Option<CompactString>,
 }
 
-fn default_layout() -> Option<String> {
-    Some("default".to_string())
+fn default_layout() -> Option<CompactString> {
+    Some(CompactString::const_new("default"))
 }

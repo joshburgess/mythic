@@ -91,17 +91,19 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
 /// Resolves each string through the interner so identical values
 /// across pages share the same heap allocation.
 fn intern_frontmatter(interner: &ThreadedRodeo, fm: &mut crate::page::Frontmatter) {
+    use compact_str::CompactString;
+
     // Intern layout name (most pages use "default")
     if let Some(ref layout) = fm.layout {
-        let key = interner.get_or_intern(layout);
-        fm.layout = Some(interner.resolve(&key).to_string());
+        let key = interner.get_or_intern(layout.as_str());
+        fm.layout = Some(CompactString::from(interner.resolve(&key)));
     }
 
     // Intern tag values (many pages share common tags)
     if let Some(ref mut tags) = fm.tags {
         for tag in tags.iter_mut() {
             let key = interner.get_or_intern(tag.as_str());
-            *tag = interner.resolve(&key).to_string();
+            *tag = CompactString::from(interner.resolve(&key));
         }
     }
 }
