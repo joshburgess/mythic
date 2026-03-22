@@ -36,6 +36,9 @@ enum Commands {
         /// Print per-stage timing breakdown
         #[arg(long)]
         profile: bool,
+        /// Output build report as JSON (for CI)
+        #[arg(long)]
+        json: bool,
     },
     /// Start the development server with live reload
     Serve {
@@ -106,6 +109,15 @@ enum Commands {
         #[arg(long)]
         drafts: bool,
     },
+    /// Watch for changes and rebuild (without starting a server)
+    Watch {
+        /// Path to config file
+        #[arg(short, long, default_value = "mythic.toml")]
+        config: PathBuf,
+        /// Include draft pages
+        #[arg(long)]
+        drafts: bool,
+    },
     /// Generate shell completions
     Completions {
         /// Shell to generate completions for
@@ -123,6 +135,7 @@ fn main() -> Result<()> {
             drafts,
             clean,
             profile,
+            json,
         } => {
             let site_config = load_config_with_validation(&config, quiet)?;
             let root = config.parent().unwrap_or_else(|| Path::new("."));
@@ -134,7 +147,7 @@ fn main() -> Result<()> {
                 }
             }
 
-            full_build(&site_config, root, drafts, profile, quiet)?;
+            full_build(&site_config, root, drafts, profile, quiet, json)?;
         }
         Commands::Serve {
             config,
@@ -231,6 +244,29 @@ fn main() -> Result<()> {
                     .count(),
                 if drafts { " (including drafts)" } else { "" },
             );
+        }
+        Commands::Watch { config, drafts } => {
+            let site_config = load_config_with_validation(&config, quiet)?;
+            let root = config
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf();
+
+            full_build(&site_config, &root, drafts, false, quiet, false)?;
+
+            let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
+            if !quiet {
+                println!("  {} for changes...", "Watching".cyan());
+            }
+
+            while let Ok(event) = watcher.rx.recv() {
+                if !quiet {
+                    println!("  {} {event:?}", "Change detected:".cyan());
+                }
+                if let Err(e) = full_build(&site_config, &root, drafts, false, quiet, false) {
+                    eprintln!("  {} {e}", "Build error:".red().bold());
+                }
+            }
         }
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
@@ -477,6 +513,7 @@ fn full_build(
     drafts: bool,
     profile: bool,
     quiet: bool,
+    json: bool,
 ) -> Result<()> {
     let output_dir = root.join(&site_config.output_dir);
     let full_start = std::time::Instant::now();
@@ -484,7 +521,7 @@ fn full_build(
     // --- Pre-build: load data, plugins ---
 
     let data_dir = root.join(&site_config.data_dir);
-    let site_data = mythic_core::data::load_data(&data_dir)?;
+    let mut site_data = mythic_core::data::load_data(&data_dir)?;
 
     let mut plugin_manager = mythic_core::plugin::PluginManager::new();
     plugin_manager.register(Box::new(mythic_core::plugin::ReadingTimePlugin::new()));
@@ -618,9 +655,70 @@ fn full_build(
         print_build_summary(&report);
     }
 
+    // JSON output for CI
+    if json {
+        let json_report = serde_json::json!({
+            "total_pages": report.total_pages,
+            "pages_written": report.pages_written,
+            "pages_unchanged": report.pages_unchanged,
+            "pages_skipped": report.pages_skipped,
+            "elapsed_ms": report.elapsed_ms,
+        });
+        println!(
+            "{}",
+            serde_json::to_string(&json_report).unwrap_or_default()
+        );
+    }
+
     // --- Post-build ---
 
     let non_draft_pages = built_pages;
+
+    // Build content collections for templates
+    let mut collections = serde_json::Map::new();
+    // All pages as array
+    let all_pages_json: Vec<serde_json::Value> = non_draft_pages.iter()
+        .map(|p| serde_json::json!({
+            "title": p.frontmatter.title.as_str(),
+            "slug": &p.slug,
+            "url": format!("/{}/", p.slug),
+            "date": p.frontmatter.date.as_deref(),
+            "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+        }))
+        .collect();
+    collections.insert(
+        "pages".to_string(),
+        serde_json::Value::Array(all_pages_json),
+    );
+
+    // Group by section (first path segment)
+    let mut sections: std::collections::HashMap<String, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for p in &non_draft_pages {
+        let section = p.slug.split('/').next().unwrap_or("").to_string();
+        if !section.is_empty() && section != p.slug {
+            sections
+                .entry(section)
+                .or_default()
+                .push(serde_json::json!({
+                    "title": p.frontmatter.title.as_str(),
+                    "slug": &p.slug,
+                    "url": format!("/{}/", p.slug),
+                    "date": p.frontmatter.date.as_deref(),
+                }));
+        }
+    }
+    collections.insert(
+        "sections".to_string(),
+        serde_json::to_value(&sections).unwrap_or_default(),
+    );
+
+    // Merge collections into site_data for template access via {{ data.pages }} and {{ data.sections }}
+    if let serde_json::Value::Object(ref mut map) = site_data {
+        for (k, v) in collections {
+            map.insert(k, v);
+        }
+    }
 
     // Detect duplicate slugs
     {
@@ -716,9 +814,13 @@ fn full_build(
                         let mut paged = page.clone();
                         paged.slug = slug.clone();
 
-                        // Add paginator to template context via extra
+                        // Merge paginator into site_data for template context
+                        let mut extra_ctx = if let serde_json::Value::Object(ref map) = site_data {
+                            map.clone()
+                        } else {
+                            serde_json::Map::new()
+                        };
                         let paginator_json = serde_json::to_value(paginator).unwrap_or_default();
-                        let mut extra_ctx = serde_json::Map::new();
                         extra_ctx.insert("paginator".to_string(), paginator_json);
                         let extra_value = serde_json::Value::Object(extra_ctx);
 
@@ -740,7 +842,9 @@ fn full_build(
             }
 
             // Non-paginated page (listing pages, or terms without pagination)
-            if let Ok(html) = engine.render(&page, site_config) {
+            if let Ok(html) =
+                engine.render_full(&page, site_config, Some(&assets_value), Some(&site_data))
+            {
                 let dest = output_dir.join(&page.slug).join("index.html");
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
@@ -780,7 +884,10 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         .to_path_buf();
 
     println!("{}", "Building site...".dimmed());
-    full_build(&site_config, &root, drafts, false, false)?;
+    if !drafts {
+        println!("  {} use --drafts to include draft pages", "tip:".dimmed());
+    }
+    full_build(&site_config, &root, drafts, false, false, false)?;
 
     let (reload_tx, _) = mythic_server::server::reload_channel();
     let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
@@ -792,7 +899,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
-            match full_build(&rebuild_config, &rebuild_root, drafts, false, true) {
+            match full_build(&rebuild_config, &rebuild_root, drafts, false, true, false) {
                 Ok(_) => {
                     use mythic_server::server::{notify_reload, ReloadMessage};
                     use mythic_server::watcher::WatchEvent;

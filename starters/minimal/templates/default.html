@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }} — {{ site.title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.7; color: #222; max-width: 38rem; margin: 0 auto; padding: 3rem 1.5rem; }
+        nav { margin-bottom: 3rem; font-size: 0.9rem; }
+        nav a { color: #555; text-decoration: none; margin-right: 1.5rem; }
+        nav a:hover { color: #000; }
+        h1 { font-size: 1.8rem; margin-bottom: 1rem; }
+        h2 { margin-top: 2rem; margin-bottom: 0.5rem; }
+        p { margin-bottom: 1rem; }
+        a { color: #0055aa; }
+        pre { background: #2b303b; color: #c0c5ce; padding: 1rem; border-radius: 4px; overflow-x: auto; margin-bottom: 1rem; }
+        code { font-size: 0.9em; }
+        :not(pre) > code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/about/">About</a>
+    </nav>
+    <main>
+        {{ content | safe }}
+    </main>
+</body>
+</html>
