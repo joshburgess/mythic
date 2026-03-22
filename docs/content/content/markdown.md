@@ -251,3 +251,31 @@ You can also provide a custom TextMate `.tmTheme` file:
 [markdown]
 syntax_theme_path = "themes/custom.tmTheme"
 ```
+
+## Content Summaries
+
+Use the `<!--more-->` marker to split content into a summary and full body:
+
+```markdown
+---
+title: My Post
+---
+This is the introduction that appears in listings.
+
+<!--more-->
+
+This is the rest of the content, only visible on the full page.
+```
+
+The summary is available in templates as `{{ page.extra.summary }}`. Pages without the marker get an auto-generated summary (first 200 characters).
+
+Use it in listing templates:
+
+```html
+{% for post in pages %}
+<article>
+  <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
+  <p>{{ post.extra.summary }}</p>
+</article>
+{% endfor %}
+```
