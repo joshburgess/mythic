@@ -242,18 +242,8 @@ where
         profile: build_profile,
     };
 
-    println!(
-        "Built {} pages ({} written, {} unchanged, {} drafts skipped) in {}ms",
-        report.total_pages,
-        report.pages_written,
-        report.pages_unchanged,
-        report.pages_skipped,
-        report.elapsed_ms
-    );
-
-    if let Some(ref prof) = report.profile {
-        prof.print();
-    }
+    // Note: callers are responsible for printing the build summary.
+    // The BuildReport and BuildProfile contain all the data needed.
 
     Ok((report, pages))
 }

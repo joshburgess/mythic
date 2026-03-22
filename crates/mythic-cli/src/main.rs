@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -54,6 +55,19 @@ enum Commands {
         #[arg(short, long, default_value = "blank")]
         template: String,
     },
+    /// Create a new content file with frontmatter scaffold
+    New {
+        /// Content type (e.g., "post", "page", "doc")
+        content_type: String,
+        /// Title of the new content
+        title: String,
+        /// Path to config file
+        #[arg(short, long, default_value = "mythic.toml")]
+        config: PathBuf,
+        /// Create as draft
+        #[arg(long)]
+        draft: bool,
+    },
     /// Check the built site for broken links and issues
     Check {
         /// Path to config file
@@ -84,7 +98,7 @@ fn main() -> Result<()> {
             clean,
             profile,
         } => {
-            let site_config = mythic_core::config::load_config(&config)?;
+            let site_config = load_config_with_validation(&config)?;
             let root = config.parent().unwrap_or_else(|| Path::new("."));
 
             if clean {
@@ -108,13 +122,21 @@ fn main() -> Result<()> {
         Commands::Init { name, template } => {
             init_project(&name, &template)?;
         }
+        Commands::New {
+            content_type,
+            title,
+            config,
+            draft,
+        } => {
+            cmd_new(&config, &content_type, &title, draft)?;
+        }
         Commands::Check { config } => {
             let site_config = mythic_core::config::load_config(&config)?;
             let root = config.parent().unwrap_or_else(|| Path::new("."));
             let output_dir = root.join(&site_config.output_dir);
 
             let report = mythic_core::check::check_site(&output_dir)?;
-            report.print_summary();
+            print_check_report(&report);
 
             if report.has_errors() {
                 std::process::exit(1);
@@ -133,14 +155,274 @@ fn main() -> Result<()> {
                     anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy")
                 }
             };
-            report.print_summary();
+            print_migration_report(&report);
         }
     }
 
     Ok(())
 }
 
-/// Run the full build pipeline with all features integrated.
+// --- Config loading with validation ---
+
+fn load_config_with_validation(
+    path: &Path,
+) -> Result<mythic_core::config::SiteConfig> {
+    let config = mythic_core::config::load_config(path)?;
+
+    // Validate: warn on common issues
+    if config.base_url.is_empty() {
+        eprintln!(
+            "  {} base_url is empty in {}",
+            "warning:".yellow().bold(),
+            path.display()
+        );
+    }
+    if config.base_url.ends_with('/') && config.base_url != "/" {
+        eprintln!(
+            "  {} base_url has trailing slash (may cause double slashes in URLs)",
+            "warning:".yellow().bold(),
+        );
+    }
+
+    // Check for unrecognized keys by re-parsing as a generic table
+    let raw = std::fs::read_to_string(path)?;
+    if let Ok(table) = raw.parse::<toml::Table>() {
+        let known_keys = [
+            "title",
+            "base_url",
+            "content_dir",
+            "output_dir",
+            "template_dir",
+            "data_dir",
+            "static_dir",
+            "styles_dir",
+            "scripts_dir",
+            "image_breakpoints",
+            "sass",
+            "taxonomies",
+            "feed",
+            "highlight",
+            "toc",
+            "sitemap",
+            "templates",
+            "i18n",
+            "ugly_urls",
+        ];
+        for key in table.keys() {
+            if !known_keys.contains(&key.as_str()) {
+                eprintln!(
+                    "  {} unrecognized config key '{}' in {}",
+                    "warning:".yellow().bold(),
+                    key.yellow(),
+                    path.display()
+                );
+            }
+        }
+    }
+
+    Ok(config)
+}
+
+// --- Colored output helpers ---
+
+fn print_build_summary(report: &mythic_core::build::BuildReport) {
+    let status = if report.pages_written > 0 {
+        "Built".green().bold().to_string()
+    } else {
+        "Built".cyan().bold().to_string()
+    };
+
+    println!(
+        "{} {} pages ({} written, {} unchanged, {} drafts skipped) in {}",
+        status,
+        report.total_pages.to_string().bold(),
+        report.pages_written.to_string().green(),
+        report.pages_unchanged.to_string().dimmed(),
+        report.pages_skipped.to_string().dimmed(),
+        format!("{}ms", report.elapsed_ms).yellow(),
+    );
+
+    if let Some(ref prof) = report.profile {
+        println!(
+            "\n  {} {}",
+            "Pipeline profile:".dimmed(),
+            ""
+        );
+        println!("    Discovery:  {:>6}ms", prof.discovery_ms);
+        println!("    Render:     {:>6}ms", prof.render_ms);
+        println!("    Templates:  {:>6}ms", prof.template_ms);
+        println!("    Output:     {:>6}ms", prof.output_ms);
+    }
+}
+
+fn print_check_report(report: &mythic_core::check::CheckReport) {
+    println!(
+        "\n{} results:",
+        "Check".cyan().bold()
+    );
+    println!(
+        "  Pages checked: {}",
+        report.pages_checked.to_string().bold()
+    );
+    println!(
+        "  Links checked: {}",
+        report.links_checked.to_string().bold()
+    );
+
+    if !report.errors.is_empty() {
+        println!(
+            "\n  {} ({}):",
+            "Errors".red().bold(),
+            report.errors.len()
+        );
+        for e in &report.errors {
+            println!(
+                "    {} {} {}",
+                "x".red(),
+                e.file.dimmed(),
+                e.message
+            );
+        }
+    }
+
+    if !report.warnings.is_empty() {
+        println!(
+            "\n  {} ({}):",
+            "Warnings".yellow().bold(),
+            report.warnings.len()
+        );
+        for w in &report.warnings {
+            println!(
+                "    {} {} {}",
+                "!".yellow(),
+                w.file.dimmed(),
+                w.message
+            );
+        }
+    }
+
+    if report.errors.is_empty() && report.warnings.is_empty() {
+        println!("  {}", "No issues found.".green());
+    }
+}
+
+fn print_migration_report(report: &mythic_core::migrate::MigrationReport) {
+    println!("\n{}", "Migration complete:".green().bold());
+    println!("  Files copied:    {}", report.files_copied);
+    println!("  Files converted: {}", report.files_converted);
+
+    if !report.warnings.is_empty() {
+        println!(
+            "\n  {} ({}):",
+            "Warnings".yellow().bold(),
+            report.warnings.len()
+        );
+        for w in &report.warnings {
+            println!("    {} {w}", "!".yellow());
+        }
+    }
+
+    if !report.errors.is_empty() {
+        println!(
+            "\n  {} ({}):",
+            "Errors".red().bold(),
+            report.errors.len()
+        );
+        for e in &report.errors {
+            println!("    {} {e}", "x".red());
+        }
+    }
+}
+
+fn format_template_error(err: &anyhow::Error) -> String {
+    let msg = err.to_string();
+
+    // Extract useful info from Tera errors
+    if msg.contains("Failed to render") {
+        if let Some(cause) = msg.split("Caused by:").nth(1) {
+            let cause = cause.trim();
+            // Extract variable name from "Variable `X` not found"
+            if cause.contains("not found in context") {
+                return format!(
+                    "{} {cause}\n    {} Check your template variables match the context (page.*, site.*, content, toc, assets.*, data.*)",
+                    "Template error:".red().bold(),
+                    "hint:".cyan(),
+                );
+            }
+            return format!("{} {cause}", "Template error:".red().bold());
+        }
+    }
+
+    // Extract useful info from Handlebars errors
+    if msg.contains("Failed to render Handlebars") {
+        return format!("{} {msg}", "Template error:".red().bold());
+    }
+
+    msg
+}
+
+// --- mythic new command ---
+
+fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> Result<()> {
+    let site_config = mythic_core::config::load_config(config_path)?;
+    let root = config_path.parent().unwrap_or_else(|| Path::new("."));
+
+    // Slugify title for filename
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+
+    // Determine output path based on content type
+    let content_dir = root.join(&site_config.content_dir);
+    let dir = if content_type == "page" {
+        content_dir.clone()
+    } else {
+        content_dir.join(format!("{content_type}s"))
+    };
+
+    std::fs::create_dir_all(&dir)?;
+    let file_path = dir.join(format!("{slug}.md"));
+
+    if file_path.exists() {
+        anyhow::bail!(
+            "File already exists: {}",
+            file_path.display()
+        );
+    }
+
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let draft_line = if draft { "\ndraft: true" } else { "" };
+
+    let content = format!(
+        "---\ntitle: \"{title}\"\ndate: \"{date}\"{draft_line}\n---\n\n"
+    );
+
+    std::fs::write(&file_path, content)?;
+
+    let rel = file_path
+        .strip_prefix(root)
+        .unwrap_or(&file_path);
+
+    println!(
+        "{} {}",
+        "Created".green().bold(),
+        rel.display()
+    );
+    if draft {
+        println!("  (marked as {})", "draft".yellow());
+    }
+
+    Ok(())
+}
+
+// --- Full build pipeline ---
+
 fn full_build(
     site_config: &mythic_core::config::SiteConfig,
     root: &Path,
@@ -152,11 +434,9 @@ fn full_build(
 
     // --- Pre-build: load data, plugins ---
 
-    // Load data files
     let data_dir = root.join(&site_config.data_dir);
     let site_data = mythic_core::data::load_data(&data_dir)?;
 
-    // Load plugins (Rust built-in + Rhai scripts)
     let mut plugin_manager = mythic_core::plugin::PluginManager::new();
     plugin_manager.register(Box::new(mythic_core::plugin::ReadingTimePlugin::new()));
 
@@ -168,10 +448,8 @@ fn full_build(
         }
     }
 
-    // Run pre-build hooks
     plugin_manager.run_pre_build(site_config)?;
 
-    // Load template engine
     let template_dir = root.join(&site_config.template_dir);
     let default_engine = site_config
         .templates
@@ -180,7 +458,6 @@ fn full_build(
         .unwrap_or("tera");
     let engine = mythic_template::TemplateEngine::new_with_default(&template_dir, default_engine)?;
 
-    // Prepare render config
     let render_config = mythic_markdown::render::RenderConfig {
         highlight_theme: site_config
             .highlight
@@ -196,11 +473,9 @@ fn full_build(
         toc_max_level: site_config.toc.as_ref().map(|t| t.max_level).unwrap_or(4),
     };
 
-    // Prepare shortcode dir — check existence once, not per-page
     let shortcode_dir = root.join("shortcodes");
     let has_shortcodes = shortcode_dir.exists();
 
-    // Build combined context for templates (assets + data)
     let assets_manifest = mythic_assets::process_assets(site_config, root)?;
     let mut template_extra = serde_json::Map::new();
     template_extra.insert(
@@ -213,40 +488,35 @@ fn full_build(
     );
     let assets_value = serde_json::Value::Object(template_extra);
 
-    // Generate syntax highlight CSS
     let highlighter = mythic_markdown::highlight::Highlighter::new(
         &render_config.highlight_theme,
         render_config.line_numbers,
     );
     let highlight_css = highlighter.generate_css();
     if !highlight_css.is_empty() {
-        let css_dir = output_dir.clone();
-        std::fs::create_dir_all(&css_dir)?;
-        std::fs::write(css_dir.join("syntax.css"), &highlight_css)?;
+        std::fs::create_dir_all(&output_dir)?;
+        std::fs::write(output_dir.join("syntax.css"), &highlight_css)?;
     }
 
-    // --- Core build with integrated pipeline ---
+    // --- Core build ---
 
     let (report, built_pages) = mythic_core::build::build_with_profile(
         site_config,
         root,
         drafts,
         |pages| {
-            // Apply data cascade
             let content_dir = root.join(&site_config.content_dir);
             if let Err(e) = mythic_core::cascade::apply_cascade(pages, &content_dir) {
-                eprintln!("  Cascade error: {e}");
+                eprintln!("  {} {e}", "cascade error:".red());
             }
 
-            // Run on_page_discovered hooks
             if let Err(e) = plugin_manager.run_all_discovered(pages) {
-                eprintln!("  Plugin error: {e}");
+                eprintln!("  {} {e}", "plugin error:".red());
             }
 
-            // Process shortcodes and pre-render hooks
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
-                    eprintln!("  Plugin pre_render error: {e}");
+                    eprintln!("  {} {e}", "plugin error:".red());
                 }
 
                 if has_shortcodes {
@@ -255,37 +525,46 @@ fn full_build(
                         &shortcode_dir,
                     ) {
                         Ok(processed) => page.raw_content = processed,
-                        Err(e) => eprintln!("  Shortcode error in {}: {e}", page.slug),
+                        Err(e) => eprintln!(
+                            "  {} in {}: {e}",
+                            "shortcode error".red(),
+                            page.slug
+                        ),
                     }
                 }
             }
 
-            // Process i18n
             if let Some(ref i18n_config) = site_config.i18n {
                 mythic_core::i18n::process_i18n(pages, i18n_config);
             }
 
-            // Render markdown with syntax highlighting and TOC
             mythic_markdown::render::render_markdown_with_config(pages, &render_config);
 
-            // Run post_render hooks
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_post_render(page) {
-                    eprintln!("  Plugin post_render error: {e}");
+                    eprintln!("  {} {e}", "plugin error:".red());
                 }
             }
         },
         Some(
             |page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-                engine.render_full(page, cfg, Some(&assets_value), Some(&site_data))
+                engine
+                    .render_full(page, cfg, Some(&assets_value), Some(&site_data))
+                    .map_err(|e| {
+                        // Print friendly error, still propagate
+                        eprintln!("  {}", format_template_error(&e));
+                        e
+                    })
             },
         ),
         profile,
     )?;
 
-    // --- Post-build: taxonomies, feeds, sitemap ---
+    // Print colored build summary
+    print_build_summary(&report);
 
-    // Post-build: use the pages returned from build (no re-discovery needed)
+    // --- Post-build ---
+
     let needs_post_build = !site_config.taxonomies.is_empty()
         || site_config.feed.is_some()
         || site_config
@@ -295,17 +574,14 @@ fn full_build(
             .unwrap_or(true);
 
     if needs_post_build {
-        // Pages are already filtered for drafts by the build pipeline
         let non_draft_pages = built_pages;
 
-        // Generate taxonomy pages
         if !site_config.taxonomies.is_empty() {
             let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
             let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
 
-            // Render and write taxonomy pages
             for mut page in taxonomy_pages {
-                page.rendered_html = Some(String::new()); // Empty content for listing pages
+                page.rendered_html = Some(String::new());
                 match engine.render(&page, site_config) {
                     Ok(html) => {
                         let dest = output_dir.join(&page.slug).join("index.html");
@@ -314,14 +590,10 @@ fn full_build(
                         }
                         std::fs::write(&dest, html)?;
                     }
-                    Err(_) => {
-                        // Template may not exist (taxonomy_list.html / taxonomy_term.html)
-                        // This is expected if the user hasn't created taxonomy templates
-                    }
+                    Err(_) => {}
                 }
             }
 
-            // Generate feeds for taxonomies
             mythic_core::feed::generate_feeds(
                 site_config,
                 &non_draft_pages,
@@ -329,23 +601,26 @@ fn full_build(
                 &output_dir,
             )?;
         } else if site_config.feed.is_some() {
-            // Site-wide feed only (no taxonomies)
             mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
         }
 
-        // Generate sitemap and robots.txt
         mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
-    } // end needs_post_build
+    }
 
-    // Run post-build hooks
     plugin_manager.run_post_build(&report)?;
 
     if profile {
-        println!("  Full pipeline: {}ms", full_start.elapsed().as_millis());
+        println!(
+            "  {} {}",
+            "Full pipeline:".dimmed(),
+            format!("{}ms", full_start.elapsed().as_millis()).yellow(),
+        );
     }
 
     Ok(())
 }
+
+// --- Dev server ---
 
 async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
@@ -354,23 +629,21 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
 
-    // Initial build with full pipeline
-    println!("Building site...");
+    println!("{}", "Building site...".dimmed());
     full_build(&site_config, &root, drafts, false)?;
 
-    // Set up reload channel
     let (reload_tx, _) = mythic_server::server::reload_channel();
-
-    // Start file watcher
     let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
 
-    // Spawn rebuild loop
     let rebuild_tx = reload_tx.clone();
     let rebuild_config = site_config.clone();
     let rebuild_root = root.clone();
     std::thread::spawn(move || {
         while let Ok(event) = watcher.rx.recv() {
-            println!("  Change detected: {event:?}");
+            println!(
+                "  {} {event:?}",
+                "Change detected:".cyan()
+            );
 
             match full_build(&rebuild_config, &rebuild_root, drafts, false) {
                 Ok(_) => {
@@ -387,7 +660,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
                     notify_reload(&rebuild_tx, msg);
                 }
                 Err(e) => {
-                    eprintln!("  Build error: {e}");
+                    eprintln!("  {} {e}", "Build error:".red().bold());
                 }
             }
         }
@@ -398,11 +671,12 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         let _ = std::process::Command::new("open").arg(&url).spawn();
     }
 
-    // Start server (blocks until Ctrl+C)
     mythic_server::server::serve(&site_config, &root, port, reload_tx).await?;
 
     Ok(())
 }
+
+// --- Init / scaffolding ---
 
 fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
@@ -410,11 +684,7 @@ fn init_project(name: &str, template: &str) -> Result<()> {
     let starters_dir = find_starters_dir();
     let starter_path = starters_dir.as_ref().and_then(|d| {
         let p = d.join(template);
-        if p.exists() {
-            Some(p)
-        } else {
-            None
-        }
+        if p.exists() { Some(p) } else { None }
     });
 
     if let Some(starter) = starter_path {
@@ -444,7 +714,12 @@ fn init_project(name: &str, template: &str) -> Result<()> {
         std::fs::write(&gitignore, "/public\n.mythic-cache.json\n")?;
     }
 
-    println!("Created new Mythic site in '{name}' (template: {template})");
+    println!(
+        "{} Mythic site in '{}' (template: {})",
+        "Created".green().bold(),
+        name.bold(),
+        template.cyan()
+    );
     println!("  cd {name} && mythic serve");
 
     Ok(())

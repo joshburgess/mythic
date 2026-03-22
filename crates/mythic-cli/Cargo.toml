@@ -14,6 +14,9 @@ mythic-server = { path = "../mythic-server" }
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
 serde_json.workspace = true
+toml.workspace = true
+owo-colors = "4"
+chrono = "0.4"
 
 [dev-dependencies]
 tempfile = "3"
