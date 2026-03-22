@@ -149,6 +149,41 @@ Build a tag cloud by checking term page counts:
 </div>
 ```
 
+## Pagination
+
+When `paginate` is set to a value greater than 0 in the taxonomy configuration, Mythic automatically splits term pages into multiple pages. The template receives a `data.paginator` object with the following fields:
+
+| Field                      | Type           | Description                                      |
+|----------------------------|----------------|--------------------------------------------------|
+| `data.paginator.pages`     | Array of Pages | The pages for the current paginated slice         |
+| `data.paginator.current_page` | Integer     | The current page number (1-based)                |
+| `data.paginator.total_pages`  | Integer     | Total number of paginated pages                  |
+| `data.paginator.prev_url`    | String or null | URL to the previous page, null on the first page |
+| `data.paginator.next_url`    | String or null | URL to the next page, null on the last page      |
+
+Use `data.paginator.pages` instead of `term.pages` when pagination is active, since it contains only the subset of pages for the current slice:
+
+```html
+{% for post in data.paginator.pages %}
+<article>
+    <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+    <time>{{ post.date | date(format="%B %e, %Y") }}</time>
+</article>
+{% endfor %}
+
+<nav class="pagination">
+    {% if data.paginator.prev_url %}
+    <a href="{{ data.paginator.prev_url }}">Previous</a>
+    {% endif %}
+    <span>Page {{ data.paginator.current_page }} of {{ data.paginator.total_pages }}</span>
+    {% if data.paginator.next_url %}
+    <a href="{{ data.paginator.next_url }}">Next</a>
+    {% endif %}
+</nav>
+```
+
+Paginated pages are generated at URLs like `/tags/rust/`, `/tags/rust/page/2/`, `/tags/rust/page/3/`, and so on.
+
 ## Custom Taxonomies
 
 Define any taxonomy you need. For example, a "series" taxonomy for multi-part content:

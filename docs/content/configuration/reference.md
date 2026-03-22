@@ -101,6 +101,7 @@ Controls the build process and output.
 | `parallel`                | Boolean | `true`     | Use parallel processing during builds               |
 | `clean`                   | Boolean | `true`     | Clean output directory before building              |
 | `incremental`             | Boolean | `true`     | Enable incremental builds                           |
+| `ugly_urls`               | Boolean | `false`    | Use flat output mode (`page.html` instead of `page/index.html`) |
 
 ```toml
 [build]
@@ -111,7 +112,22 @@ deep_merge_frontmatter = true
 parallel = true
 clean = true
 incremental = true
+ugly_urls = true
 ```
+
+### Ugly URLs
+
+When `ugly_urls = true`, Mythic writes each page as a flat file (e.g., `blog/my-post.html`) instead of the default "clean URL" style (`blog/my-post/index.html`). This reduces the total number of directories created during a build and can noticeably speed up builds on sites with thousands of pages. It also matches the URL scheme some hosting environments expect. Note that your internal links should include the `.html` extension when this mode is enabled.
+
+### Config Validation
+
+Mythic validates your `mythic.toml` on every build and emits a warning for any unrecognized keys. This helps catch typos and outdated options early. For example, if you write `template_engne` instead of `template_engine`, you will see:
+
+```
+  Warning: unrecognized config key `build.template_engne` in mythic.toml
+```
+
+No action is required to enable this behavior -- it runs automatically.
 
 ## [server]
 
