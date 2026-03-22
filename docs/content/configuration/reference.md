@@ -61,6 +61,18 @@ locales = ["en", "fr", "de", "ja"]
 
 [plugins]
 reading_time = true
+
+[lint]
+min_word_count = 100
+max_word_count = 10000
+required_fields = ["title", "date"]
+require_tags = true
+require_date = true
+
+[[remote]]
+name = "github_repos"
+url = "https://api.github.com/users/myuser/repos"
+ttl = 3600
 ```
 
 ## [site]
@@ -299,6 +311,59 @@ path = "plugins/my-plugin.rhai"
 ```
 
 See [Plugins](/features/plugins/) for details on available plugins and writing your own.
+
+## [lint]
+
+Content linting rules that check your Markdown files during every build. Warnings are informational and do not cause the build to fail.
+
+| Option            | Type    | Default | Description                                         |
+|-------------------|---------|---------|-----------------------------------------------------|
+| `min_word_count`  | Integer | `0`     | Minimum word count per page (0 = disabled)          |
+| `max_word_count`  | Integer | `0`     | Maximum word count per page (0 = disabled)          |
+| `required_fields` | Array   | `[]`    | Frontmatter fields that every page must have        |
+| `require_tags`    | Boolean | `false` | Require at least one tag per page                   |
+| `require_date`    | Boolean | `false` | Require a date field on every page                  |
+
+```toml
+[lint]
+min_word_count = 200
+max_word_count = 8000
+required_fields = ["title", "date", "description"]
+require_tags = true
+require_date = true
+```
+
+See [Content Linting](/features/linting/) for details on each rule and how warnings appear.
+
+## [[remote]]
+
+Fetch external data at build time and make it available in templates as `data.remote.<name>`. Each `[[remote]]` entry defines one data source.
+
+| Option | Type    | Default | Description                                            |
+|--------|---------|---------|--------------------------------------------------------|
+| `name` | String  | --      | Key used to access the data in templates               |
+| `url`  | String  | --      | URL to fetch JSON data from                            |
+| `ttl`  | Integer | `3600`  | Cache duration in seconds (0 = fetch every build)      |
+
+```toml
+[[remote]]
+name = "github_repos"
+url = "https://api.github.com/users/myuser/repos"
+ttl = 3600
+
+[[remote]]
+name = "quotes"
+url = "https://api.example.com/quotes.json"
+ttl = 86400
+```
+
+Access in templates:
+
+```html
+{% for repo in data.remote.github_repos %}
+  <a href="{{ repo.html_url }}">{{ repo.name }}</a>
+{% endfor %}
+```
 
 ## Environment Variables
 

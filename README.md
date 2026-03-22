@@ -15,11 +15,21 @@ A fast, batteries-included static site generator written in Rust.
 - **Atom + RSS feeds** - Site-wide and per-taxonomy feeds in both formats
 - **i18n** - Locale directories, hreflang tags, translation files
 - **Plugin system** - Rust trait-based hooks plus Rhai scripting for user plugins
-- **SEO tools** - Sitemap, robots.txt, link checker, heading hierarchy validation
+- **SEO tools** - Sitemap, robots.txt, Schema.org JSON-LD auto-generation, SRI hashes
+- **Accessibility auditing** - Build-time WCAG checks (alt text, lang, headings, viewport, zoom)
+- **Content linting** - Configurable quality rules (word counts, required fields, orphan detection)
 - **Search** - JSON search index generation for client-side search (Fuse.js, Lunr.js)
 - **Pagination** - Paginated taxonomy and listing pages with full paginator context
 - **Redirects** - Frontmatter `aliases` generate HTML redirect files with canonical links
 - **404 pages** - `content/404.md` automatically renders as `404.html` for static hosts
+- **Math rendering** - Inline `$...$` and display `$$...$$` with KaTeX support
+- **Admonitions** - Obsidian-style `> [!NOTE]`, `> [!WARNING]` callout blocks
+- **Related content** - Tag-based relevance engine for "You might also like" sections
+- **Remote data** - Fetch JSON/YAML from APIs at build time with filesystem caching
+- **Computed frontmatter** - Rhai expressions in frontmatter fields (`rhai: word_count / 200`)
+- **Smart diffing** - Deploy manifests showing exactly which files changed between builds
+- **Custom output formats** - JSON API output per-page with site-wide API index
+- **Render hooks** - Customize how markdown links and images are rendered to HTML
 - **Migration tools** - Import from Jekyll, Hugo, or Eleventy
 
 ## Install

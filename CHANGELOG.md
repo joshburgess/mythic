@@ -59,6 +59,41 @@ All notable changes to Mythic will be documented in this file.
 - Thin LTO + codegen-units=1 release profile
 - Pre-computed output paths to avoid redundant PathBuf joins
 
+### Unique Differentiators (no other SSG has these)
+- Content linting with configurable quality rules (word counts, required fields, orphan detection)
+- Schema.org JSON-LD auto-generation from frontmatter (BlogPosting, Article, WebPage, BreadcrumbList)
+- Build-time accessibility auditing (WCAG checks: alt text, lang, headings, links, viewport, zoom)
+- Smart content diffing with deploy manifests for minimal deployments
+- Rhai-powered computed frontmatter fields (`extra.field: "rhai: word_count / 200"`)
+
+### Additional Features
+- Content collections available in templates (`{{ data.pages }}`, `{{ data.sections.blog }}`)
+- `mythic watch` command (rebuild without server)
+- `mythic list` command (show all pages with dates and slugs)
+- `mythic clean` command (delete output directory)
+- `mythic build --json` structured output for CI
+- `mythic completions <shell>` for bash/zsh/fish/powershell
+- `--quiet` global flag for CI/scripting
+- RSS 2.0 feed generation alongside Atom
+- JSON Feed 1.1 generation
+- Custom Tera filters: reading_time, word_count, truncate_words
+- Content summaries via `<!--more-->` marker
+- Markdown render hooks for customizing link/image output
+- Obsidian-style admonitions (`> [!NOTE]`, `> [!WARNING]`, etc.)
+- Math rendering (inline `$...$`, display `$$...$$`, KaTeX support)
+- Related content engine (tag-based relevance scoring)
+- Remote data fetching with filesystem caching and TTL
+- Custom JSON output format per-page and site-wide API index
+- SRI (Subresource Integrity) hashes for CSS/JS assets
+- Built-in shortcode templates (youtube, figure, callout, details, github)
+- Minimal starter template
+- Starters embedded in binary via include_dir
+- Draft preview hint in dev server
+- Build errors shown in browser during `mythic serve`
+- Duplicate slug detection with warnings
+- Skip failing pages instead of aborting build
+- `--version` flag
+
 ### Fixed
 - Empty tags no longer produce empty-slug taxonomy terms
 - "C++" and "C#" now slugify to distinct values (c-plus-plus, c-sharp)
