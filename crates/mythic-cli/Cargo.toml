@@ -21,6 +21,8 @@ serde_json.workspace = true
 toml.workspace = true
 owo-colors = "4"
 chrono = "0.4"
+include_dir = "0.7"
+clap_complete = "4"
 
 [dev-dependencies]
 tempfile = "3"

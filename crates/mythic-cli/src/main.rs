@@ -1,7 +1,8 @@
 //! CLI binary for the Mythic static site generator.
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use owo_colors::OwoColorize;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,9 @@ use std::path::{Path, PathBuf};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Suppress output (for CI/scripting)
+    #[arg(short, long, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -87,10 +91,16 @@ enum Commands {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let quiet = cli.quiet;
 
     match cli.command {
         Commands::Build {
@@ -99,7 +109,7 @@ fn main() -> Result<()> {
             clean,
             profile,
         } => {
-            let site_config = load_config_with_validation(&config)?;
+            let site_config = load_config_with_validation(&config, quiet)?;
             let root = config.parent().unwrap_or_else(|| Path::new("."));
 
             if clean {
@@ -109,7 +119,7 @@ fn main() -> Result<()> {
                 }
             }
 
-            full_build(&site_config, root, drafts, profile)?;
+            full_build(&site_config, root, drafts, profile, quiet)?;
         }
         Commands::Serve {
             config,
@@ -156,7 +166,13 @@ fn main() -> Result<()> {
                     anyhow::bail!("Unknown source SSG: {other}. Supported: jekyll, hugo, eleventy")
                 }
             };
-            print_migration_report(&report);
+            if !quiet {
+                print_migration_report(&report);
+            }
+        }
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "mythic", &mut std::io::stdout());
         }
     }
 
@@ -165,22 +181,27 @@ fn main() -> Result<()> {
 
 // --- Config loading with validation ---
 
-fn load_config_with_validation(path: &Path) -> Result<mythic_core::config::SiteConfig> {
+fn load_config_with_validation(
+    path: &Path,
+    quiet: bool,
+) -> Result<mythic_core::config::SiteConfig> {
     let config = mythic_core::config::load_config(path)?;
 
     // Validate: warn on common issues
-    if config.base_url.is_empty() {
-        eprintln!(
-            "  {} base_url is empty in {}",
-            "warning:".yellow().bold(),
-            path.display()
-        );
-    }
-    if config.base_url.ends_with('/') && config.base_url != "/" {
-        eprintln!(
-            "  {} base_url has trailing slash (may cause double slashes in URLs)",
-            "warning:".yellow().bold(),
-        );
+    if !quiet {
+        if config.base_url.is_empty() {
+            eprintln!(
+                "  {} base_url is empty in {}",
+                "warning:".yellow().bold(),
+                path.display()
+            );
+        }
+        if config.base_url.ends_with('/') && config.base_url != "/" {
+            eprintln!(
+                "  {} base_url has trailing slash (may cause double slashes in URLs)",
+                "warning:".yellow().bold(),
+            );
+        }
     }
 
     // Check for unrecognized keys by re-parsing as a generic table
@@ -207,14 +228,16 @@ fn load_config_with_validation(path: &Path) -> Result<mythic_core::config::SiteC
             "i18n",
             "ugly_urls",
         ];
-        for key in table.keys() {
-            if !known_keys.contains(&key.as_str()) {
-                eprintln!(
-                    "  {} unrecognized config key '{}' in {}",
-                    "warning:".yellow().bold(),
-                    key.yellow(),
-                    path.display()
-                );
+        if !quiet {
+            for key in table.keys() {
+                if !known_keys.contains(&key.as_str()) {
+                    eprintln!(
+                        "  {} unrecognized config key '{}' in {}",
+                        "warning:".yellow().bold(),
+                        key.yellow(),
+                        path.display()
+                    );
+                }
             }
         }
     }
@@ -391,6 +414,7 @@ fn full_build(
     root: &Path,
     drafts: bool,
     profile: bool,
+    quiet: bool,
 ) -> Result<()> {
     let output_dir = root.join(&site_config.output_dir);
     let full_start = std::time::Instant::now();
@@ -507,23 +531,47 @@ fn full_build(
         },
         Some(
             |page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-                engine
-                    .render_full(page, cfg, Some(&assets_value), Some(&site_data))
-                    .inspect_err(|e| {
-                        // Print friendly error, still propagate
-                        eprintln!("  {}", format_template_error(e));
-                    })
+                match engine.render_full(page, cfg, Some(&assets_value), Some(&site_data)) {
+                    Ok(html) => Ok(html),
+                    Err(e) => {
+                        // Log the error but skip the page instead of aborting the build
+                        eprintln!(
+                            "  {} (skipping page '{}')",
+                            format_template_error(&e),
+                            page.slug
+                        );
+                        Ok(String::new())
+                    }
+                }
             },
         ),
         profile,
     )?;
 
     // Print colored build summary
-    print_build_summary(&report);
+    if !quiet {
+        print_build_summary(&report);
+    }
 
     // --- Post-build ---
 
     let non_draft_pages = built_pages;
+
+    // Detect duplicate slugs
+    {
+        let mut seen = std::collections::HashMap::new();
+        for page in &non_draft_pages {
+            if let Some(prev) = seen.insert(&page.slug, &page.source_path) {
+                eprintln!(
+                    "  {} duplicate slug '{}': {} and {}",
+                    "warning:".yellow().bold(),
+                    page.slug.yellow(),
+                    prev.display(),
+                    page.source_path.display(),
+                );
+            }
+        }
+    }
 
     // Handle 404 page: if 404.md was built, copy its output to 404.html at root
     // (most static hosts serve 404.html for missing routes)
@@ -539,7 +587,7 @@ fn full_build(
         &output_dir,
         &site_config.base_url,
     )?;
-    if redirect_count > 0 {
+    if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }
 
@@ -646,7 +694,7 @@ fn full_build(
 
     plugin_manager.run_post_build(&report)?;
 
-    if profile {
+    if profile && !quiet {
         println!(
             "  {} {}",
             "Full pipeline:".dimmed(),
@@ -667,7 +715,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         .to_path_buf();
 
     println!("{}", "Building site...".dimmed());
-    full_build(&site_config, &root, drafts, false)?;
+    full_build(&site_config, &root, drafts, false, false)?;
 
     let (reload_tx, _) = mythic_server::server::reload_channel();
     let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
@@ -679,7 +727,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
-            match full_build(&rebuild_config, &rebuild_root, drafts, false) {
+            match full_build(&rebuild_config, &rebuild_root, drafts, false, true) {
                 Ok(_) => {
                     use mythic_server::server::{notify_reload, ReloadMessage};
                     use mythic_server::watcher::WatchEvent;
@@ -720,9 +768,14 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
 
 // --- Init / scaffolding ---
 
+// Starters embedded in the binary via include_dir
+use include_dir::{include_dir, Dir};
+static STARTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../starters");
+
 fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
 
+    // First try filesystem starters (development), then embedded starters
     let starters_dir = find_starters_dir();
     let starter_path = starters_dir.as_ref().and_then(|d| {
         let p = d.join(template);
@@ -734,8 +787,13 @@ fn init_project(name: &str, template: &str) -> Result<()> {
     });
 
     if let Some(starter) = starter_path {
+        // Filesystem starters (development mode)
         copy_dir_recursive(&starter, &root)?;
+    } else if let Some(embedded) = STARTERS.get_dir(template) {
+        // Embedded starters (installed binary)
+        extract_embedded_dir(embedded, &root)?;
     } else {
+        // Fallback: minimal blank site
         std::fs::create_dir_all(root.join("content"))?;
         std::fs::create_dir_all(root.join("templates"))?;
 
@@ -805,6 +863,24 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
             }
             std::fs::copy(path, &target)?;
         }
+    }
+    Ok(())
+}
+
+fn extract_embedded_dir(dir: &include_dir::Dir, dest: &Path) -> Result<()> {
+    std::fs::create_dir_all(dest)?;
+    for file in dir.files() {
+        let target = dest.join(file.path());
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&target, file.contents())?;
+    }
+    for subdir in dir.dirs() {
+        extract_embedded_dir(
+            subdir,
+            &dest.join(subdir.path().file_name().unwrap_or_default()),
+        )?;
     }
     Ok(())
 }
