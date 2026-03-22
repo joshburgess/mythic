@@ -326,6 +326,7 @@ fn load_config_with_validation(
             "i18n",
             "ugly_urls",
             "remote",
+            "lint",
         ];
         if !quiet {
             for key in table.keys() {

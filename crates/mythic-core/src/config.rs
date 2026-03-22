@@ -69,6 +69,9 @@ pub struct SiteConfig {
     /// Remote data sources fetched at build time.
     #[serde(default)]
     pub remote: Vec<crate::remote::RemoteSource>,
+    /// Content linting configuration.
+    #[serde(default)]
+    pub lint: Option<crate::lint::LintConfig>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -223,6 +226,7 @@ impl SiteConfig {
             i18n: None,
             ugly_urls: false,
             remote: Vec::new(),
+            lint: None,
         }
     }
 }
