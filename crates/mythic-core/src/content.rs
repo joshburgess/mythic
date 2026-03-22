@@ -1,6 +1,10 @@
 //! Content discovery — walks the content directory and builds Page structs.
+//!
+//! Uses lasso string interning to deduplicate repeated frontmatter values
+//! (layout names, tag strings) across pages, reducing heap allocations.
 
 use anyhow::{Context, Result};
+use lasso::ThreadedRodeo;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -15,48 +19,44 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
         return Ok(Vec::new());
     }
 
-    // Pre-count files to avoid Vec resizing
-    let file_count = WalkDir::new(&content_dir)
+    // String interner for deduplicating repeated frontmatter values.
+    let interner = ThreadedRodeo::default();
+
+    // Collect file paths in a single walkdir pass
+    let paths: Vec<std::path::PathBuf> = WalkDir::new(&content_dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .count();
+        .filter(|e| {
+            let name = e.file_name().to_str().unwrap_or("");
+            !name.starts_with('.') && !name.starts_with('_')
+        })
+        .filter(|e| {
+            matches!(
+                e.path().extension().and_then(|x| x.to_str()),
+                Some("md" | "markdown")
+            )
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect();
 
-    let mut pages = Vec::with_capacity(file_count);
+    let mut pages = Vec::with_capacity(paths.len());
 
-    for entry in WalkDir::new(&content_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        let path = entry.path();
+    // Reusable hasher state — avoids re-creating RandomState per file
+    let hash_state = ahash::RandomState::with_seeds(
+        0x517cc1b727220a95,
+        0x6c62272e07bb0142,
+        0x2f8e4c5d6a3b1e09,
+        0x9d8c7b6a5f4e3d2c,
+    );
 
-        // Skip hidden files and files starting with _
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with('.') || name.starts_with('_') {
-                continue;
-            }
-        }
-
-        // Only process markdown files
-        match path.extension().and_then(|e| e.to_str()) {
-            Some("md" | "markdown") => {}
-            _ => continue,
-        }
-
+    for path in &paths {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read: {}", path.display()))?;
 
-        // Use ahash with fixed seeds for deterministic cross-build hashing
         let content_hash = {
             use std::hash::{BuildHasher, Hash, Hasher};
-            let state = ahash::RandomState::with_seeds(
-                0x517cc1b727220a95,
-                0x6c62272e07bb0142,
-                0x2f8e4c5d6a3b1e09,
-                0x9d8c7b6a5f4e3d2c,
-            );
-            let mut hasher = state.build_hasher();
+            let mut hasher = hash_state.build_hasher();
             raw.hash(&mut hasher);
             hasher.finish()
         };
@@ -67,7 +67,10 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
             .to_string_lossy()
             .replace('\\', "/");
 
-        let (frontmatter, body) = mythic_markdown_parse_stub(&raw);
+        let (mut frontmatter, body) = mythic_markdown_parse_stub(&raw);
+
+        // Intern repeated strings to deduplicate heap allocations
+        intern_frontmatter(&interner, &mut frontmatter);
 
         pages.push(Page {
             source_path: path.to_path_buf(),
@@ -82,6 +85,25 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
     }
 
     Ok(pages)
+}
+
+/// Intern frequently repeated frontmatter strings (layout, tags).
+/// Resolves each string through the interner so identical values
+/// across pages share the same heap allocation.
+fn intern_frontmatter(interner: &ThreadedRodeo, fm: &mut crate::page::Frontmatter) {
+    // Intern layout name (most pages use "default")
+    if let Some(ref layout) = fm.layout {
+        let key = interner.get_or_intern(layout);
+        fm.layout = Some(interner.resolve(&key).to_string());
+    }
+
+    // Intern tag values (many pages share common tags)
+    if let Some(ref mut tags) = fm.tags {
+        for tag in tags.iter_mut() {
+            let key = interner.get_or_intern(tag.as_str());
+            *tag = interner.resolve(&key).to_string();
+        }
+    }
 }
 
 /// Lightweight frontmatter extraction for the discovery phase.
@@ -385,6 +407,39 @@ mod tests {
 
         let config = fixture_config();
         let pages = discover_content(&config, dir.path()).unwrap();
-        assert!(!pages[0].slug.contains('\\'), "Slug should use / not \\: {}", pages[0].slug);
+        assert!(
+            !pages[0].slug.contains('\\'),
+            "Slug should use / not \\: {}",
+            pages[0].slug
+        );
+    }
+
+    #[test]
+    fn string_interning_deduplicates_layouts() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+
+        // Create multiple pages with the same layout
+        for i in 0..10 {
+            std::fs::write(
+                content.join(format!("page-{i}.md")),
+                "---\ntitle: Test\nlayout: blog\ntags:\n  - rust\n  - web\n---\nBody",
+            )
+            .unwrap();
+        }
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 10);
+
+        // All pages should have layout "blog" and tags ["rust", "web"]
+        for page in &pages {
+            assert_eq!(page.frontmatter.layout.as_deref(), Some("blog"));
+            assert_eq!(
+                page.frontmatter.tags.as_ref().unwrap(),
+                &["rust", "web"]
+            );
+        }
     }
 }

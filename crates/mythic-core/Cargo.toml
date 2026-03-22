@@ -13,7 +13,7 @@ walkdir = "2"
 rayon = "1"
 rhai = { version = "1", features = ["sync"] }
 ahash = "0.8"
-lasso = "0.7"
+lasso = { version = "0.7", features = ["multi-threaded"] }
 
 [dev-dependencies]
 tempfile = "3"
