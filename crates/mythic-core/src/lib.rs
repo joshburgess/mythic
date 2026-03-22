@@ -14,6 +14,7 @@ pub mod data;
 pub mod feed;
 pub mod i18n;
 pub mod migrate;
+pub mod output_format;
 pub mod page;
 pub mod pagination;
 pub mod plugin;

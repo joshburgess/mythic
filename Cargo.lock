@@ -1949,12 +1949,14 @@ name = "mythic-assets"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "grass",
  "image",
  "mythic-core",
  "rayon",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "walkdir",
 ]
