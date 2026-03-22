@@ -53,8 +53,8 @@ jobs:
       - run: cargo build --release --workspace
       - name: Smoke test
         run: |
-          ./target/release/mythic-cli init /tmp/smoke-test --template blank
-          ./target/release/mythic-cli build --config /tmp/smoke-test/mythic.toml
+          ./target/release/mythic init /tmp/smoke-test --template blank
+          ./target/release/mythic build --config /tmp/smoke-test/mythic.toml
           test -f /tmp/smoke-test/public/index/index.html
 
   docs-site:
@@ -66,7 +66,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p mythic-cli
       - name: Build documentation site
-        run: ./target/release/mythic-cli build --config docs/mythic.toml
+        run: ./target/release/mythic build --config docs/mythic.toml
       - name: Verify output
         run: |
           test -f docs/public/index/index.html

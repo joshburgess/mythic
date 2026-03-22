@@ -35,6 +35,17 @@ All notable changes to Mythic will be documented in this file.
 - CI workflow with tests (Ubuntu/macOS/Windows), clippy, rustfmt
 - Benchmark workflow with Hugo comparison
 - 21-page documentation site built with Mythic itself
+- `mythic new <type> "Title"` command for scaffolding content files with frontmatter
+- `mythic --version` flag
+- Colored CLI output (build summaries, errors, warnings)
+- Config validation with warnings for unrecognized keys, empty base_url, trailing slashes
+- Friendly template error messages with hints
+- Pagination module with Paginator context for taxonomy term pages
+- Search index generation (`search-index.json`) for client-side search
+- 404 page handling (`content/404.md` renders as `public/404.html`)
+- Redirect/alias support via frontmatter `aliases` field
+- Build errors shown in browser during `mythic serve` via error overlay
+- XML control character stripping in Atom feeds
 
 ### Performance
 - Parallel markdown rendering via rayon
@@ -52,3 +63,7 @@ All notable changes to Mythic will be documented in this file.
 - Empty tags no longer produce empty-slug taxonomy terms
 - "C++" and "C#" now slugify to distinct values (c-plus-plus, c-sharp)
 - Shortcodes inside fenced code blocks are preserved as literal text
+- All `unwrap()` calls removed from production code (4 crash risks eliminated)
+- Sitemap URLs respect `ugly_urls` config
+- XML-invalid control characters stripped from feed output
+- Binary renamed from `mythic-cli` to `mythic`
