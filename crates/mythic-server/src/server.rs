@@ -193,26 +193,44 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
     let path = req.uri().path();
     let mut file_path = state.output_dir.join(path.trim_start_matches('/'));
 
-    // Clean URL: /about/ → /about/index.html
+    // Clean URL resolution:
+    //   /           → /index/index.html  or  /index.html
+    //   /about      → /about/index.html
+    //   /about/     → /about/index.html
     if file_path.is_dir() || !file_path.exists() {
-        let with_index = if file_path.is_dir() {
-            file_path.join("index.html")
+        let candidates = if file_path.is_dir() {
+            vec![
+                file_path.join("index.html"),
+                file_path.join("index").join("index.html"),
+            ]
         } else {
-            file_path.with_extension("").join("index.html")
+            vec![
+                file_path.with_extension("").join("index.html"),
+                file_path.with_extension("html"),
+            ]
         };
-        if with_index.exists() {
-            file_path = with_index;
+        let mut found = false;
+        for candidate in candidates {
+            if candidate.exists() && !candidate.is_dir() {
+                file_path = candidate;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return (axum::http::StatusCode::NOT_FOUND, "404 Not Found").into_response();
         }
     }
 
-    if !file_path.exists() {
+    if !file_path.exists() || file_path.is_dir() {
         return (axum::http::StatusCode::NOT_FOUND, "404 Not Found").into_response();
     }
 
     let content = match std::fs::read(&file_path) {
         Ok(c) => c,
-        Err(_) => {
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response()
+        Err(e) => {
+            let msg = format!("500: failed to read {}: {}", file_path.display(), e);
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response()
         }
     };
 
