@@ -34,11 +34,17 @@ impl FileWatcher {
         let content_dir = root.join(&config.content_dir);
         let template_dir = root.join(&config.template_dir);
         let data_dir = root.join(&config.data_dir);
+        let styles_dir = root.join(&config.styles_dir);
+        let scripts_dir = root.join(&config.scripts_dir);
+        let shortcodes_dir = root.join("shortcodes");
         let config_file = root.join("mythic.toml");
 
         let event_tx = tx.clone();
         let content_dir_c = content_dir.clone();
         let template_dir_c = template_dir.clone();
+        let styles_dir_c = styles_dir.clone();
+        let scripts_dir_c = scripts_dir.clone();
+        let shortcodes_dir_c = shortcodes_dir.clone();
         let config_file_c = config_file.clone();
 
         let mut debouncer = new_debouncer(
@@ -63,11 +69,17 @@ impl FileWatcher {
                             Some("css") => WatchEvent::CssChanged(path.clone()),
                             _ => WatchEvent::ContentChanged(path.clone()),
                         }
-                    } else if path.starts_with(&template_dir_c) {
+                    } else if path.starts_with(&template_dir_c)
+                        || path.starts_with(&shortcodes_dir_c)
+                    {
                         match path.extension().and_then(|e| e.to_str()) {
                             Some("css") => WatchEvent::CssChanged(path.clone()),
                             _ => WatchEvent::TemplateChanged(path.clone()),
                         }
+                    } else if path.starts_with(&styles_dir_c) {
+                        WatchEvent::CssChanged(path.clone())
+                    } else if path.starts_with(&scripts_dir_c) {
+                        WatchEvent::TemplateChanged(path.clone())
                     } else {
                         WatchEvent::ContentChanged(path.clone())
                     };
@@ -79,7 +91,14 @@ impl FileWatcher {
         .context("Failed to create file watcher")?;
 
         // Watch directories that exist
-        for dir in [&content_dir, &template_dir, &data_dir] {
+        for dir in [
+            &content_dir,
+            &template_dir,
+            &data_dir,
+            &styles_dir,
+            &scripts_dir,
+            &shortcodes_dir,
+        ] {
             if dir.exists() {
                 debouncer
                     .watcher()

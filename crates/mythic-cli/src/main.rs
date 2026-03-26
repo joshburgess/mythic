@@ -925,11 +925,24 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
 
     let rebuild_tx = reload_tx.clone();
-    let rebuild_config = site_config.clone();
+    let rebuild_config_path = root.join("mythic.toml");
+    let mut rebuild_config = site_config.clone();
     let rebuild_root = root.clone();
     std::thread::spawn(move || {
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
+
+            // Reload config from disk on config changes (or any change,
+            // since templates/styles may reference config values)
+            if matches!(event, mythic_server::watcher::WatchEvent::ConfigChanged) {
+                match load_config_with_validation(&rebuild_config_path, true) {
+                    Ok(new_config) => rebuild_config = new_config,
+                    Err(e) => {
+                        eprintln!("  {} {e}", "Config error:".red().bold());
+                        continue;
+                    }
+                }
+            }
 
             match full_build(&rebuild_config, &rebuild_root, drafts, false, true, false) {
                 Ok(_) => {
