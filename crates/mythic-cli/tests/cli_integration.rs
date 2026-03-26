@@ -654,7 +654,7 @@ fn content_collections_available_in_templates() {
     );
 
     // The index page should show the page count from data.pages
-    let html = std::fs::read_to_string(site.join("public/index/index.html")).unwrap();
+    let html = std::fs::read_to_string(site.join("public/index.html")).unwrap();
     assert!(
         html.contains("PAGES:3"),
         "Expected data.pages to have 3 entries, got: {html}"

@@ -65,6 +65,39 @@ impl DepGraph {
         self.hashes.insert(slug.to_string(), content_hash);
     }
 
+    /// Remove orphaned entries from the cache whose slugs no longer exist in
+    /// the current set of pages, and delete the corresponding HTML files from
+    /// the output directory.
+    pub fn remove_orphans(&mut self, current_slugs: &[&str], output_dir: &Path, ugly_urls: bool) {
+        let current: std::collections::HashSet<&str> = current_slugs.iter().copied().collect();
+        let orphaned: Vec<String> = self
+            .hashes
+            .keys()
+            .filter(|slug| !current.contains(slug.as_str()))
+            .cloned()
+            .collect();
+
+        for slug in &orphaned {
+            // Delete the stale HTML file
+            let path = if ugly_urls {
+                output_dir.join(format!("{slug}.html"))
+            } else if slug == "index" {
+                output_dir.join("index.html")
+            } else {
+                output_dir.join(slug).join("index.html")
+            };
+            let _ = std::fs::remove_file(&path);
+
+            // Also try to remove the now-empty parent directory (clean URLs)
+            if !ugly_urls && slug != "index" {
+                let dir = output_dir.join(slug);
+                let _ = std::fs::remove_dir(&dir);
+            }
+
+            self.hashes.remove(slug);
+        }
+    }
+
     /// Save the cache to disk.
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {

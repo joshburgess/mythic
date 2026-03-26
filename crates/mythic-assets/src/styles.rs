@@ -5,21 +5,22 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
-/// Concatenate all `.css` files in the directory (sorted alphabetically).
+/// Concatenate all `.css` files in the directory tree (sorted by path for deterministic output).
 pub fn concat_css(styles_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(styles_dir)
-        .with_context(|| format!("Failed to read styles dir: {}", styles_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(styles_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| x == "css")
-                .unwrap_or(false)
+            e.file_type().is_file()
+                && e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| x == "css")
+                    .unwrap_or(false)
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {

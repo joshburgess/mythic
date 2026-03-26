@@ -5,21 +5,22 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
-/// Concatenate all `.js` files in the directory (sorted alphabetically).
+/// Concatenate all `.js` files in the directory tree (sorted by path for deterministic output).
 pub fn concat_js(scripts_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(scripts_dir)
-        .with_context(|| format!("Failed to read scripts dir: {}", scripts_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(scripts_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| x == "js")
-                .unwrap_or(false)
+            e.file_type().is_file()
+                && e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| x == "js")
+                    .unwrap_or(false)
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {

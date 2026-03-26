@@ -32,6 +32,11 @@ impl TemplateEngine {
         // Load Tera templates (.html and .tera)
         let html_glob = template_dir.join("**/*.html").to_string_lossy().to_string();
         let mut tera = tera::Tera::new(&html_glob).unwrap_or_default();
+        // Disable Tera's default HTML auto-escaping. We're rendering HTML
+        // templates, not user input, so auto-escaping breaks intentional HTML
+        // in variables like `content`. This also makes Hugo-compat filters
+        // like `safeHTML` work as expected without requiring `| safe`.
+        tera.autoescape_on(vec![]);
 
         // Also load .tera files by reading them manually
         if template_dir.exists() {
@@ -171,7 +176,19 @@ impl TemplateEngine {
         };
 
         let mut ctx = tera::Context::new();
-        ctx.insert("page", &page.frontmatter);
+        // Build page context from frontmatter plus slug and url
+        let mut page_ctx = serde_json::to_value(&page.frontmatter).unwrap_or_default();
+        if let serde_json::Value::Object(ref mut map) = page_ctx {
+            map.insert(
+                "slug".to_string(),
+                serde_json::Value::String(page.slug.clone()),
+            );
+            map.insert(
+                "url".to_string(),
+                serde_json::Value::String(format!("{}/{}/", config.base_path(), page.slug)),
+            );
+        }
+        ctx.insert("page", &page_ctx);
         ctx.insert("content", page.rendered_html.as_deref().unwrap_or(""));
         ctx.insert("toc", &page.toc);
 
@@ -208,7 +225,19 @@ impl TemplateEngine {
         let template_name = format!("{layout}.hbs");
 
         let mut data = serde_json::Map::new();
-        data.insert("page".to_string(), serde_json::to_value(&page.frontmatter)?);
+        // Build page context from frontmatter plus slug and url
+        let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
+        if let serde_json::Value::Object(ref mut map) = page_ctx {
+            map.insert(
+                "slug".to_string(),
+                serde_json::Value::String(page.slug.clone()),
+            );
+            map.insert(
+                "url".to_string(),
+                serde_json::Value::String(format!("{}/{}/", config.base_path(), page.slug)),
+            );
+        }
+        data.insert("page".to_string(), page_ctx);
         data.insert(
             "content".to_string(),
             serde_json::Value::String(page.rendered_html.as_deref().unwrap_or("").to_string()),
@@ -425,13 +454,15 @@ fn urlize_filter(
     Ok(tera::Value::String(result))
 }
 
-/// Filter: `{{ html | safeHTML }}` — mark content as safe (no escaping).
-/// This is a Hugo compatibility alias for Tera's built-in `| safe`.
+/// Filter: `{{ html | safeHTML }}` — Hugo compatibility alias.
+/// With auto-escaping disabled (see `tera.autoescape_on(vec![])` in `new_with_default`),
+/// this is a no-op pass-through, matching Hugo's behavior where `safeHTML` marks content
+/// as safe for HTML output. The `| safe` built-in also works, but this filter exists so
+/// Hugo templates using `| safeHTML` don't need to be rewritten.
 fn safe_html_filter(
     value: &tera::Value,
     _args: &std::collections::HashMap<String, tera::Value>,
 ) -> tera::Result<tera::Value> {
-    // In Tera, `safe` is a built-in. This filter just passes through.
     Ok(value.clone())
 }
 

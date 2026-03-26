@@ -105,9 +105,9 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     use crate::page::Frontmatter;
 
     if let Some(after_open) = raw.strip_prefix("---") {
-        if let Some(end) = after_open.find("---") {
+        if let Some(end) = after_open.find("\n---") {
             let yaml_str = &after_open[..end];
-            let body = after_open[end + 3..].trim_start().to_string();
+            let body = after_open[end + 4..].trim_start().to_string();
             if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(yaml_str) {
                 return (fm, body);
             }
@@ -115,9 +115,9 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     }
 
     if let Some(after_open) = raw.strip_prefix("+++") {
-        if let Some(end) = after_open.find("+++") {
+        if let Some(end) = after_open.find("\n+++") {
             let toml_str = &after_open[..end];
-            let body = after_open[end + 3..].trim_start().to_string();
+            let body = after_open[end + 4..].trim_start().to_string();
             if let Ok(fm) = toml::from_str::<Frontmatter>(toml_str) {
                 return (fm, body);
             }

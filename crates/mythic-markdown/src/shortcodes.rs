@@ -8,6 +8,30 @@ use std::collections::HashMap;
 use std::path::Path;
 use tera::Tera;
 
+/// A cached shortcode engine that avoids recreating the Tera instance per page.
+pub struct ShortcodeEngine {
+    tera: Tera,
+}
+
+impl ShortcodeEngine {
+    /// Create a new shortcode engine by loading templates from the given directory.
+    pub fn new(shortcode_dir: &Path) -> Self {
+        if !shortcode_dir.exists() {
+            return Self {
+                tera: Tera::default(),
+            };
+        }
+        let glob = shortcode_dir.join("*.html");
+        let tera = Tera::new(&glob.to_string_lossy()).unwrap_or_default();
+        Self { tera }
+    }
+
+    /// Process all shortcodes in the raw content using the cached engine.
+    pub fn process(&self, content: &str) -> Result<String> {
+        process_with_engine(content, &self.tera)
+    }
+}
+
 /// Process all shortcodes in the raw content, replacing them with rendered HTML.
 pub fn process_shortcodes(content: &str, shortcode_dir: &Path) -> Result<String> {
     if !shortcode_dir.exists() {

@@ -45,6 +45,7 @@ impl FileWatcher {
         let styles_dir_c = styles_dir.clone();
         let scripts_dir_c = scripts_dir.clone();
         let shortcodes_dir_c = shortcodes_dir.clone();
+        let data_dir_c = data_dir.clone();
         let config_file_c = config_file.clone();
 
         let mut debouncer = new_debouncer(
@@ -79,6 +80,8 @@ impl FileWatcher {
                     } else if path.starts_with(&styles_dir_c) {
                         WatchEvent::CssChanged(path.clone())
                     } else if path.starts_with(&scripts_dir_c) {
+                        WatchEvent::TemplateChanged(path.clone())
+                    } else if path.starts_with(&data_dir_c) {
                         WatchEvent::TemplateChanged(path.clone())
                     } else {
                         WatchEvent::ContentChanged(path.clone())

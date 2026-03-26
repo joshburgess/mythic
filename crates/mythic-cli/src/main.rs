@@ -537,9 +537,11 @@ fn full_build(
         }
     }
 
-    // Pre-build content discovery for collections (available in templates)
+    // Pre-build content discovery for collections (available in templates).
+    // The discovered pages are reused by the build pipeline to avoid running
+    // discovery a second time.
+    let pre_pages = mythic_core::content::discover_content(site_config, root)?;
     {
-        let pre_pages = mythic_core::content::discover_content(site_config, root)?;
         let mut collections = serde_json::Map::new();
 
         let all_pages_json: Vec<serde_json::Value> = pre_pages
@@ -629,6 +631,7 @@ fn full_build(
 
     let shortcode_dir = root.join("shortcodes");
     let has_shortcodes = shortcode_dir.exists();
+    let shortcode_engine = mythic_markdown::shortcodes::ShortcodeEngine::new(&shortcode_dir);
 
     let assets_manifest = mythic_assets::process_assets(site_config, root)?;
     let mut template_extra = serde_json::Map::new();
@@ -680,10 +683,7 @@ fn full_build(
                 }
 
                 if has_shortcodes {
-                    match mythic_markdown::shortcodes::process_shortcodes(
-                        &page.raw_content,
-                        &shortcode_dir,
-                    ) {
+                    match shortcode_engine.process(&page.raw_content) {
                         Ok(processed) => page.raw_content = processed,
                         Err(e) => eprintln!("  {} in {}: {e}", "shortcode error".red(), page.slug),
                     }
@@ -707,18 +707,21 @@ fn full_build(
                 match engine.render_full(page, cfg, Some(&assets_value), Some(&site_data)) {
                     Ok(html) => Ok(html),
                     Err(e) => {
-                        // Log the error but skip the page instead of aborting the build
+                        // Log the error and return Err so the build pipeline
+                        // sets rendered_html = None, skipping the page entirely
+                        // instead of writing an empty HTML file.
                         eprintln!(
                             "  {} (skipping page '{}')",
                             format_template_error(&e),
                             page.slug
                         );
-                        Ok(String::new())
+                        Err(e)
                     }
                 }
             },
         ),
         profile,
+        Some(pre_pages),
     )?;
 
     // Print colored build summary
@@ -1001,7 +1004,15 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
 
     if open {
         let url = format!("http://localhost:{port}");
-        let _ = std::process::Command::new("open").arg(&url).spawn();
+        #[cfg(target_os = "macos")]
+        let cmd = "open";
+        #[cfg(target_os = "linux")]
+        let cmd = "xdg-open";
+        #[cfg(target_os = "windows")]
+        let cmd = "start";
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        let cmd = "open";
+        let _ = std::process::Command::new(cmd).arg(&url).spawn();
     }
 
     mythic_server::server::serve(&site_config, &root, port, reload_tx).await?;

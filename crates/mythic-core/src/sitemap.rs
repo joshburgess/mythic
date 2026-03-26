@@ -53,7 +53,9 @@ fn generate_sitemap(
             continue;
         }
 
-        let url = if config.ugly_urls {
+        let url = if page.slug == "index" {
+            format!("{base_url}/")
+        } else if config.ugly_urls {
             format!("{base_url}/{}.html", page.slug)
         } else {
             format!("{base_url}/{}/", page.slug)

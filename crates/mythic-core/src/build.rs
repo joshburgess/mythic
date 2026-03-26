@@ -68,12 +68,15 @@ where
     R: Fn(&mut [Page]),
     T: Fn(&Page, &SiteConfig) -> Result<String> + Sync,
 {
-    build_with_profile(config, root, include_drafts, render_fn, template_fn, false)
+    build_with_profile(config, root, include_drafts, render_fn, template_fn, false, None)
 }
 
 /// Run the build pipeline with optional profiling.
 /// Returns the build report and the processed pages for post-build use
 /// (taxonomy generation, feeds, sitemaps).
+///
+/// If `pre_discovered_pages` is `Some`, those pages are used directly
+/// instead of running content discovery again.
 pub fn build_with_profile<R, T>(
     config: &SiteConfig,
     root: &Path,
@@ -81,6 +84,7 @@ pub fn build_with_profile<R, T>(
     render_fn: R,
     template_fn: Option<T>,
     profile: bool,
+    pre_discovered_pages: Option<Vec<Page>>,
 ) -> Result<(BuildReport, Vec<Page>)>
 where
     R: Fn(&mut [Page]),
@@ -90,7 +94,10 @@ where
 
     // Discovery
     let t0 = Instant::now();
-    let mut pages = discover_content(config, root)?;
+    let mut pages = match pre_discovered_pages {
+        Some(pages) => pages,
+        None => discover_content(config, root)?,
+    };
     let discovery_ms = t0.elapsed().as_millis();
 
     // Filter drafts
@@ -122,7 +129,13 @@ where
             pages.par_iter().map(|page| tmpl_fn(page, config)).collect();
 
         for (page, result) in pages.iter_mut().zip(results) {
-            page.rendered_html = Some(result?);
+            match result {
+                Ok(html) => page.rendered_html = Some(html),
+                Err(e) => {
+                    eprintln!("  Template error for '{}': {e:#}", page.slug);
+                    page.rendered_html = None;
+                }
+            }
         }
     }
     let template_ms = t2.elapsed().as_millis();
@@ -227,6 +240,11 @@ where
     for job in &to_write {
         cache.record(&job.page.slug, job.page.content_hash);
     }
+
+    // Remove orphaned cache entries and stale HTML files for deleted content
+    let current_slugs: Vec<&str> = pages.iter().map(|p| p.slug.as_str()).collect();
+    cache.remove_orphans(&current_slugs, &output_dir, ugly_urls);
+
     cache.save()?;
 
     let output_ms = t3.elapsed().as_millis();
@@ -381,6 +399,7 @@ mod tests {
             noop_render,
             None::<NoTemplate>,
             true,
+            None,
         )
         .unwrap();
 
@@ -585,7 +604,7 @@ mod tests {
     // --- Error handling ---
 
     #[test]
-    fn template_error_propagates() {
+    fn template_error_skips_page() {
         let config = test_config();
         let dir = tempfile::tempdir().unwrap();
         let content = dir.path().join("content");
@@ -596,12 +615,11 @@ mod tests {
             anyhow::bail!("Template rendering failed")
         };
 
-        let result = build(&config, dir.path(), false, noop_render, Some(bad_tmpl));
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Template rendering failed"));
+        // Template errors are now logged and skipped rather than aborting the build.
+        let (report, pages) =
+            build(&config, dir.path(), false, noop_render, Some(bad_tmpl)).unwrap();
+        assert_eq!(report.pages_written, 0);
+        assert!(pages[0].rendered_html.is_none());
     }
 
     // --- Hugo regression tests ---

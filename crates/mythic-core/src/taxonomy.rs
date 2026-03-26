@@ -32,15 +32,17 @@ pub struct Taxonomy {
 
 /// Extract taxonomies from pages and generate taxonomy/term pages.
 pub fn build_taxonomies(config: &SiteConfig, pages: &[Page]) -> Vec<Taxonomy> {
+    let base_path = config.base_path();
     config
         .taxonomies
         .iter()
-        .map(|tc| build_one_taxonomy(tc, pages))
+        .map(|tc| build_one_taxonomy(tc, base_path, pages))
         .collect()
 }
 
-fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
-    let mut terms_map: HashMap<String, Vec<TaxonomyPageRef>> = HashMap::new();
+fn build_one_taxonomy(tc: &TaxonomyConfig, base_path: &str, pages: &[Page]) -> Taxonomy {
+    // Map from slug -> (original_display_name, page_refs)
+    let mut terms_map: HashMap<String, (String, Vec<TaxonomyPageRef>)> = HashMap::new();
 
     for page in pages {
         let values = extract_taxonomy_values(&page.frontmatter, &tc.name);
@@ -53,21 +55,23 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
             if slug.is_empty() {
                 continue;
             }
-            terms_map.entry(slug).or_default().push(TaxonomyPageRef {
+            let entry = terms_map
+                .entry(slug)
+                .or_insert_with(|| (value.clone(), Vec::new()));
+            entry.1.push(TaxonomyPageRef {
                 title: page.frontmatter.title.to_string(),
                 slug: page.slug.clone(),
                 date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
-                url: format!("/{}/", page.slug),
+                url: format!("{}/{}/", base_path, page.slug),
             });
         }
     }
 
     let mut terms: Vec<TaxonomyTerm> = terms_map
         .into_iter()
-        .map(|(slug, mut pages)| {
+        .map(|(slug, (name, mut pages))| {
             // Sort by date descending
             pages.sort_by(|a, b| b.date.cmp(&a.date));
-            let name = slug.clone(); // Will be the slugified form
             TaxonomyTerm { name, slug, pages }
         })
         .collect();

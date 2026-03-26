@@ -7,22 +7,23 @@ use std::path::Path;
 ///
 /// Order: alphabetical, with `.scss`/`.sass` files compiled to CSS first.
 pub fn compile_and_concat(styles_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(styles_dir)
-        .with_context(|| format!("Failed to read styles dir: {}", styles_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(styles_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            matches!(
-                e.path().extension().and_then(|x| x.to_str()),
-                Some("css" | "scss" | "sass")
-            )
+            e.file_type().is_file()
+                && matches!(
+                    e.path().extension().and_then(|x| x.to_str()),
+                    Some("css" | "scss" | "sass")
+                )
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {
-        let path = entry.path();
+        let path = entry.path().to_path_buf();
         let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("");
 
         let css = match ext {
