@@ -1,6 +1,7 @@
 //! Rhai scripting engine integration for user-defined plugins.
 
 use anyhow::{Context, Result};
+use rhai::packages::Package;
 use rhai::{Dynamic, Engine, Scope, AST};
 use std::path::Path;
 
@@ -17,8 +18,26 @@ pub struct RhaiPlugin {
 impl RhaiPlugin {
     /// Load a Rhai plugin from a script file.
     pub fn from_file(path: &Path) -> Result<Self> {
-        let engine = Engine::new();
-        let ast = engine.compile_file(path.into()).map_err(|e| {
+        let mut engine = Engine::new_raw();
+
+        // Register only safe packages — no file I/O or system access
+        engine.register_global_module(rhai::packages::ArithmeticPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::BasicStringPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::MoreStringPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::LogicPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::BasicMathPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::LanguageCorePackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::BasicArrayPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::BasicMapPackage::new().as_shared_module());
+
+        // Prevent infinite loops and deeply nested expressions
+        engine.set_max_operations(100_000);
+        engine.set_max_expr_depths(64, 64);
+
+        let script = std::fs::read_to_string(path).map_err(|e| {
+            anyhow::anyhow!("Failed to read Rhai script {}: {}", path.display(), e)
+        })?;
+        let ast = engine.compile(&script).map_err(|e| {
             anyhow::anyhow!("Failed to compile Rhai script {}: {}", path.display(), e)
         })?;
 

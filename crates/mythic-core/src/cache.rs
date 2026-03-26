@@ -68,6 +68,10 @@ impl DepGraph {
     /// Remove orphaned entries from the cache whose slugs no longer exist in
     /// the current set of pages, and delete the corresponding HTML files from
     /// the output directory.
+    ///
+    /// Note: this only operates on content page hashes recorded via `record()`.
+    /// Taxonomy pages (tags, categories, etc.) are generated in post-build and
+    /// are not tracked in the cache, so they are unaffected by orphan cleanup.
     pub fn remove_orphans(&mut self, current_slugs: &[&str], output_dir: &Path, ugly_urls: bool) {
         let current: std::collections::HashSet<&str> = current_slugs.iter().copied().collect();
         let orphaned: Vec<String> = self
@@ -257,6 +261,87 @@ mod tests {
         }
         // Verify a changed one is detected
         assert!(reloaded.is_changed("page-500", 99999));
+    }
+
+    #[test]
+    fn env_hash_changes_when_template_file_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        // Create minimal config
+        std::fs::write(
+            root.join("mythic.toml"),
+            "title = \"T\"\nbase_url = \"http://x.com\"\n",
+        )
+        .unwrap();
+
+        // Create a template directory with a file
+        let tmpl_dir = root.join("templates");
+        std::fs::create_dir_all(&tmpl_dir).unwrap();
+        std::fs::write(tmpl_dir.join("base.html"), "<html>v1</html>").unwrap();
+
+        let config = crate::config::load_config(&root.join("mythic.toml")).unwrap();
+        let hash1 = crate::cache::compute_env_hash(root, &config);
+
+        // Change the template file content
+        std::fs::write(tmpl_dir.join("base.html"), "<html>v2</html>").unwrap();
+        let hash2 = crate::cache::compute_env_hash(root, &config);
+
+        assert_ne!(hash1, hash2, "env_hash should change when a template file changes");
+    }
+
+    #[test]
+    fn orphan_cleanup_removes_stale_html() {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path();
+
+        let mut graph = DepGraph::load(output);
+        graph.record("about", 111);
+        graph.record("old-post", 222);
+
+        // Create the corresponding output files (clean URLs)
+        let about_dir = output.join("about");
+        std::fs::create_dir_all(&about_dir).unwrap();
+        std::fs::write(about_dir.join("index.html"), "<p>about</p>").unwrap();
+
+        let old_dir = output.join("old-post");
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("index.html"), "<p>old</p>").unwrap();
+
+        // Also create a non-content file that should be preserved
+        std::fs::write(output.join("style.css"), "body {}").unwrap();
+
+        // Remove orphans: only "about" still exists
+        graph.remove_orphans(&["about"], output, false);
+
+        // "about" should still be there
+        assert!(about_dir.join("index.html").exists());
+        // "old-post" should be removed
+        assert!(!old_dir.join("index.html").exists());
+        // Non-content file preserved
+        assert!(output.join("style.css").exists());
+        // Cache should no longer contain "old-post"
+        assert!(graph.is_changed("old-post", 222));
+        assert!(!graph.is_changed("about", 111));
+    }
+
+    #[test]
+    fn orphan_cleanup_ugly_urls_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path();
+
+        let mut graph = DepGraph::load(output);
+        graph.record("about", 111);
+        graph.record("old-post", 222);
+
+        // In ugly_urls mode, output is slug.html directly
+        std::fs::write(output.join("about.html"), "<p>about</p>").unwrap();
+        std::fs::write(output.join("old-post.html"), "<p>old</p>").unwrap();
+
+        graph.remove_orphans(&["about"], output, true);
+
+        assert!(output.join("about.html").exists());
+        assert!(!output.join("old-post.html").exists());
     }
 
     #[test]

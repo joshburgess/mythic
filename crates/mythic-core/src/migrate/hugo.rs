@@ -112,11 +112,19 @@ fn convert_config_file(
         }
     };
 
-    let toml = format!("title = \"{title}\"\nbase_url = \"{base_url}\"\n");
+    let toml = format!(
+        "title = \"{}\"\nbase_url = \"{}\"\n",
+        escape_toml_string(&title),
+        escape_toml_string(&base_url),
+    );
     std::fs::write(output.join("mythic.toml"), toml)?;
     report.files_converted += 1;
 
     Ok(())
+}
+
+fn escape_toml_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 fn migrate_content(source: &Path, output: &Path, report: &mut MigrationReport) -> Result<()> {
@@ -373,5 +381,37 @@ mod tests {
             std::fs::read_to_string(out.path().join("shortcodes/youtube.html")).unwrap();
         assert!(shortcode.contains("{{ id"));
         assert!(!shortcode.contains(".Get"));
+    }
+
+    #[test]
+    fn titles_with_double_quotes_properly_escaped_in_toml() {
+        let src = tempfile::tempdir().unwrap();
+        let out = tempfile::tempdir().unwrap();
+
+        std::fs::write(
+            src.path().join("config.toml"),
+            "title = \"Hugo's \\\"Best\\\" Site\"\nbaseURL = \"https://example.com\"",
+        )
+        .unwrap();
+
+        migrate(src.path(), out.path()).unwrap();
+        let config = std::fs::read_to_string(out.path().join("mythic.toml")).unwrap();
+
+        // The generated TOML should be valid (double quotes escaped)
+        let parsed: Result<toml::Value, _> = config.parse();
+        assert!(
+            parsed.is_ok(),
+            "Generated mythic.toml should be valid TOML, got: {config}"
+        );
+    }
+
+    #[test]
+    fn escape_toml_string_handles_quotes_and_backslashes() {
+        assert_eq!(escape_toml_string(r#"hello"world"#), r#"hello\"world"#);
+        assert_eq!(escape_toml_string(r"path\to\file"), r"path\\to\\file");
+        assert_eq!(
+            escape_toml_string(r#"say "hi" to\me"#),
+            r#"say \"hi\" to\\me"#
+        );
     }
 }

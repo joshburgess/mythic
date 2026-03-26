@@ -627,4 +627,40 @@ mod tests {
         assert!(!feed.contains('\x0B'), "Vertical tab should be stripped");
         assert!(!feed.contains('\x00'), "Null byte should be stripped");
     }
+
+    #[test]
+    fn atom_self_link_no_double_slashes_with_trailing_slash_base_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = feed_config();
+        // base_url with trailing slash
+        config.base_url = "https://example.com/".to_string();
+        let pages = vec![page("Post", "hello", "2024-01-01", vec![])];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        // The self-link should not have double slashes after the domain
+        assert!(
+            !feed.contains("example.com//"),
+            "Feed should not have double slashes in URLs, got: {feed}"
+        );
+        assert!(feed.contains("example.com/feed.xml"));
+    }
+
+    #[test]
+    fn atom_summary_has_type_text_attribute() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![page("Post", "hello", "2024-01-01", vec![])];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert!(
+            feed.contains("type=\"text\""),
+            "Atom <summary> should have type=\"text\" attribute, got: {feed}"
+        );
+    }
 }

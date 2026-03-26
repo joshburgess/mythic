@@ -57,9 +57,13 @@ fn convert_config(source: &Path, output: &Path, report: &mut MigrationReport) ->
         .unwrap_or("http://localhost:3000");
     let description = yaml["description"].as_str();
 
-    let mut toml = format!("title = \"{title}\"\nbase_url = \"{base_url}\"\n");
+    let mut toml = format!(
+        "title = \"{}\"\nbase_url = \"{}\"\n",
+        escape_toml_string(title),
+        escape_toml_string(base_url),
+    );
     if let Some(desc) = description {
-        toml.push_str(&format!("description = \"{desc}\"\n"));
+        toml.push_str(&format!("description = \"{}\"\n", escape_toml_string(desc)));
     }
 
     std::fs::write(output.join("mythic.toml"), toml)?;
@@ -227,6 +231,10 @@ fn copy_static_assets(source: &Path, output: &Path, report: &mut MigrationReport
     }
 
     Ok(())
+}
+
+fn escape_toml_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 fn copy_dir_if_exists(src: &Path, dest: &Path, report: &mut MigrationReport) -> Result<()> {

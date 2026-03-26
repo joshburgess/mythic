@@ -156,6 +156,13 @@ fn process_single_image(
     Ok(variants)
 }
 
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
 /// Generate a responsive `<picture>` element from the manifest.
 pub fn picture_tag(
     manifest: &ImageManifest,
@@ -168,7 +175,8 @@ pub fn picture_tag(
         .get(src)
         .with_context(|| format!("Image not found in manifest: {src}"))?;
 
-    let sizes_attr = sizes.unwrap_or("100vw");
+    let alt = escape_html(alt);
+    let sizes_attr = escape_html(sizes.unwrap_or("100vw"));
 
     let webp_sources: Vec<&GeneratedImage> =
         variants.iter().filter(|v| v.format == "webp").collect();
@@ -183,17 +191,18 @@ pub fn picture_tag(
     if !webp_sources.is_empty() {
         let srcset: Vec<String> = webp_sources
             .iter()
-            .map(|v| format!("/{} {}w", v.path, v.width))
+            .map(|v| format!("/{} {}w", escape_html(&v.path), v.width))
             .collect();
         html.push_str(&format!(
-            "  <source type=\"image/webp\" srcset=\"{}\" sizes=\"{sizes_attr}\">\n",
-            srcset.join(", ")
+            "  <source type=\"image/webp\" srcset=\"{}\" sizes=\"{}\">\n",
+            srcset.join(", "),
+            sizes_attr
         ));
     }
 
     html.push_str(&format!(
-        "  <img src=\"/{}\" alt=\"{alt}\" width=\"{}\" height=\"auto\" loading=\"lazy\">\n",
-        original.path, original.width
+        "  <img src=\"/{}\" alt=\"{}\" width=\"{}\" height=\"auto\" loading=\"lazy\">\n",
+        escape_html(&original.path), alt, original.width
     ));
     html.push_str("</picture>");
 

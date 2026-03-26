@@ -106,4 +106,30 @@ mod tests {
         assert!(result.contains("font-size: 16px"));
         assert!(!result.contains("$size"));
     }
+
+    #[test]
+    fn sass_partials_excluded_from_compilation() {
+        let dir = tempfile::tempdir().unwrap();
+        // A partial (starts with _) should not be compiled independently
+        std::fs::write(
+            dir.path().join("_variables.scss"),
+            "$color: red;\nbody { color: $color; }",
+        )
+        .unwrap();
+        // A non-partial that imports it
+        std::fs::write(
+            dir.path().join("main.scss"),
+            "@import 'variables';\nh1 { font-size: 2em; }",
+        )
+        .unwrap();
+
+        let result = compile_and_concat(dir.path()).unwrap();
+        // The partial should not appear twice (once from its own compilation
+        // and once from the import). It should only appear via the import in main.scss.
+        let body_count = result.matches("color: red").count();
+        assert_eq!(
+            body_count, 1,
+            "Partial should only be included via @import, not compiled independently. Got:\n{result}"
+        );
+    }
 }

@@ -1163,7 +1163,10 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
 fn extract_embedded_dir(dir: &include_dir::Dir, dest: &Path) -> Result<()> {
     std::fs::create_dir_all(dest)?;
     for file in dir.files() {
-        let target = dest.join(file.path());
+        // file.path() returns the path relative to the include_dir! macro root,
+        // so strip the dir prefix to get just the filename within this directory.
+        let rel = file.path().strip_prefix(dir.path()).unwrap_or(file.path());
+        let target = dest.join(rel);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }

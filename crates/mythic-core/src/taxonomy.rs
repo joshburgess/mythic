@@ -480,4 +480,77 @@ mod tests {
         assert_eq!(taxonomies[0].terms.len(), 1);
         assert_eq!(taxonomies[0].terms[0].pages.len(), 2);
     }
+
+    #[test]
+    fn term_names_preserve_original_casing() {
+        let config = config_with_tags();
+        let pages = vec![page_with_tags(
+            "Post",
+            "post",
+            vec!["Machine Learning", "iOS"],
+            None,
+        )];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let names: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect();
+        // The display name should preserve the original casing even though
+        // the slug is lowercased
+        assert!(
+            names.contains(&"Machine Learning"),
+            "Term name should preserve original casing, got: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"iOS"),
+            "Term name should preserve original casing, got: {:?}",
+            names
+        );
+        // But slugs should be lowercased
+        let slugs: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.slug.as_str())
+            .collect();
+        assert!(slugs.contains(&"machine-learning"));
+        assert!(slugs.contains(&"ios"));
+    }
+
+    #[test]
+    fn term_urls_include_base_path() {
+        let mut config = SiteConfig::for_testing("Test", "https://example.com/blog");
+        config.taxonomies.push(TaxonomyConfig {
+            name: "tags".to_string(),
+            slug: "tags".to_string(),
+            feed: true,
+        });
+
+        let pages = vec![page_with_tags("Post", "my-post", vec!["rust"], None)];
+        let taxonomies = build_taxonomies(&config, &pages);
+        let rust = &taxonomies[0].terms[0];
+
+        // Page URL should include the base_path "/blog"
+        assert_eq!(
+            rust.pages[0].url, "/blog/my-post/",
+            "Taxonomy page URLs should include base_path"
+        );
+    }
+
+    #[test]
+    fn index_page_url_is_root_slash() {
+        let config = config_with_tags();
+        let pages = vec![page_with_tags("Home", "index", vec!["featured"], None)];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let term = &taxonomies[0].terms[0];
+
+        // The index page URL should be "/" not "/index/"
+        assert_eq!(
+            term.pages[0].url, "/",
+            "Index page URL should be '/' not '/index/'"
+        );
+    }
 }

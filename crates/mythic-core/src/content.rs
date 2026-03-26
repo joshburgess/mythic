@@ -436,4 +436,49 @@ mod tests {
             assert_eq!(page.frontmatter.tags.as_ref().unwrap(), &["rust", "web"]);
         }
     }
+
+    #[test]
+    fn frontmatter_with_triple_dash_in_yaml_content() {
+        // The `\n---` fix: frontmatter delimiter must start at beginning of line
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // YAML value contains "---" but not at the start of a line
+        std::fs::write(
+            content.join("tricky.md"),
+            "---\ntitle: \"A title with --- dashes\"\ndescription: \"Has --- in it\"\n---\nBody text here",
+        )
+        .unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "A title with --- dashes");
+        assert_eq!(pages[0].raw_content, "Body text here");
+    }
+
+    #[test]
+    fn bom_stripped_then_frontmatter_parses_correctly() {
+        // Verify the full chain: BOM is stripped AND frontmatter still parses
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+
+        // UTF-8 BOM followed by YAML frontmatter with tags
+        let mut data = vec![0xEF, 0xBB, 0xBF];
+        data.extend_from_slice(
+            b"---\ntitle: BOM Test\ntags:\n  - rust\n  - web\n---\nContent after BOM",
+        );
+        std::fs::write(content.join("bom-tags.md"), data).unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "BOM Test");
+        assert_eq!(
+            pages[0].frontmatter.tags.as_ref().unwrap(),
+            &["rust", "web"]
+        );
+        assert_eq!(pages[0].raw_content, "Content after BOM");
+    }
 }

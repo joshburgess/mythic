@@ -181,7 +181,10 @@ fn transform_admonitions(html: &str) -> String {
 
             // Remove the marker from the inner content.
             // Find where the marker is and strip it.
-            let marker_pos = inner.find(&marker).unwrap();
+            let marker_pos = match inner.find(&marker) {
+                Some(pos) => pos,
+                None => continue, // Skip this admonition if we can't find the marker
+            };
             let before_marker = &inner[..marker_pos];
             let after_marker = &inner[marker_pos + marker.len()..];
 

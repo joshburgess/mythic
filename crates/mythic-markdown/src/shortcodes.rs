@@ -413,4 +413,29 @@ mod tests {
         assert!(result.contains("class=\"wrap\""));
         assert!(result.contains("<div class=\"wrap\"></div>"));
     }
+
+    #[test]
+    fn iteration_limit_prevents_infinite_loop() {
+        // Create a paired shortcode whose template output contains another
+        // paired shortcode invocation of itself. The engine re-processes
+        // paired shortcodes in a loop, so this creates infinite expansion.
+        // Use Tera's {% raw %} block so that Tera outputs the literal
+        // shortcode syntax without trying to parse it.
+        let tera = setup_tera(&[(
+            "wrap.html",
+            "<div>{% raw %}{{% wrap %}}{% endraw %}{{ inner | safe }}{% raw %}{{% /wrap %}}{% endraw %}</div>",
+        )]);
+
+        let input = "{{% wrap %}}seed{{% /wrap %}}";
+        let result = process_with_engine(input, &tera);
+        assert!(
+            result.is_err(),
+            "Recursive shortcode expansion should produce an error"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("maximum depth") || err_msg.contains("circular"),
+            "Error message should mention depth limit, got: {err_msg}"
+        );
+    }
 }

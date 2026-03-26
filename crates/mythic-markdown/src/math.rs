@@ -86,11 +86,11 @@ fn transform_inline_math(html: &str) -> String {
             // Look for closing $
             if let Some(end) = find_closing_dollar(&chars, i + 1) {
                 let math: String = chars[i + 1..end].iter().collect();
-                // Skip if it looks like a price ($10) rather than math
+                // Skip bare integers like $100$ which are likely dollar amounts.
+                // Anything with dots, commas, or other characters is treated as
+                // potential math (e.g. $3.14$ is valid LaTeX).
                 if !math.is_empty()
-                    && !math
-                        .chars()
-                        .all(|c| c.is_ascii_digit() || c == '.' || c == ',')
+                    && !math.chars().all(|c| c.is_ascii_digit())
                 {
                     result.push_str(&format!("<span class=\"math math-inline\">{math}</span>"));
                     i = end + 1;

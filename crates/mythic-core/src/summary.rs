@@ -17,9 +17,9 @@ pub fn extract_summaries(pages: &mut [Page]) {
         let summary = if let Some(pos) = page.raw_content.find(MORE_MARKER) {
             page.raw_content[..pos].trim().to_string()
         } else {
-            // Auto-summary: first 200 chars of raw content
-            let mut summary = page.raw_content.chars().take(200).collect::<String>();
-            if page.raw_content.len() > 200 {
+            // Auto-summary: first 200 characters of raw content
+            let mut summary: String = page.raw_content.chars().take(200).collect();
+            if page.raw_content.chars().count() > 200 {
                 summary.push_str("...");
             }
             summary

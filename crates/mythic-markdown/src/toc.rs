@@ -69,7 +69,7 @@ pub fn extract_toc(html: &str, min_level: u32, max_level: u32) -> (Vec<TocEntry>
         if opening_tag.contains("id=") {
             modified.push_str(&after_open[..close_pos + close_tag.len()]);
         } else {
-            modified.push_str(&format!("<h{level} id=\"{id}\">"));
+            modified.push_str(&format!("<h{level} id=\"{}\">", escape_html(&id)));
             modified.push_str(inner_html);
             modified.push_str(&close_tag);
         }
@@ -93,28 +93,44 @@ pub fn render_toc_html(entries: &[TocEntry]) -> String {
 
     for entry in entries {
         while current_level < entry.level {
+            // Wrap nested <ul> in an <li> to produce valid HTML when levels skip
+            if current_level > 0 {
+                html.push_str("<li>\n");
+            }
             html.push_str("<ul>\n");
             current_level += 1;
             list_depth += 1;
         }
         while current_level > entry.level {
             html.push_str("</ul>\n");
+            html.push_str("</li>\n");
             current_level -= 1;
             list_depth -= 1;
         }
         html.push_str(&format!(
             "<li><a href=\"#{}\">{}</a></li>\n",
-            entry.id, entry.text
+            escape_html(&entry.id),
+            escape_html(&entry.text)
         ));
     }
 
     while list_depth > 0 {
         html.push_str("</ul>\n");
+        if list_depth > 1 {
+            html.push_str("</li>\n");
+        }
         list_depth -= 1;
     }
 
     html.push_str("</nav>");
     html
+}
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn find_heading_tag(s: &str) -> Option<usize> {
@@ -316,5 +332,79 @@ mod tests {
         assert!(modified.contains(&format!("id=\"{id}\"")));
         // Verify the text is preserved
         assert_eq!(entries[0].text, "Über Café résumé");
+    }
+
+    #[test]
+    fn heading_text_with_html_chars_escaped_in_toc() {
+        // Heading text containing < > & " should be properly escaped in TOC output
+        let entries = vec![TocEntry {
+            level: 2,
+            text: "A < B & C > D".to_string(),
+            id: "a-b-c-d".to_string(),
+        }];
+
+        let html = render_toc_html(&entries);
+        assert!(
+            html.contains("A &lt; B &amp; C &gt; D"),
+            "HTML special characters in TOC text should be escaped, got: {html}"
+        );
+        assert!(
+            !html.contains("<li><a href=\"#a-b-c-d\">A < B"),
+            "Unescaped < in TOC would break HTML"
+        );
+    }
+
+    #[test]
+    fn skipped_heading_levels_produce_valid_nesting() {
+        // Document jumps from h2 to h4, skipping h3
+        let entries = vec![
+            TocEntry {
+                level: 2,
+                text: "Section".to_string(),
+                id: "section".to_string(),
+            },
+            TocEntry {
+                level: 4,
+                text: "Deep".to_string(),
+                id: "deep".to_string(),
+            },
+            TocEntry {
+                level: 2,
+                text: "Another".to_string(),
+                id: "another".to_string(),
+            },
+        ];
+
+        let html = render_toc_html(&entries);
+        // Should produce valid nested HTML (opening and closing <ul> tags balance)
+        let open_count = html.matches("<ul>").count();
+        let close_count = html.matches("</ul>").count();
+        assert_eq!(
+            open_count, close_count,
+            "Opening and closing <ul> tags should balance, got {open_count} opens and {close_count} closes in:\n{html}"
+        );
+        // All entries should be present
+        assert!(html.contains("Section"));
+        assert!(html.contains("Deep"));
+        assert!(html.contains("Another"));
+    }
+
+    #[test]
+    fn extract_toc_escapes_html_in_heading_ids() {
+        // Heading with characters that need escaping in the id attribute
+        let html = "<h2>Tom &amp; Jerry</h2>";
+        let (entries, modified) = extract_toc(html, 1, 6);
+        assert_eq!(entries.len(), 1);
+        // The id should be in the modified HTML, properly quoted
+        assert!(
+            modified.contains("id=\""),
+            "Modified HTML should contain an id attribute"
+        );
+        // The id value should not contain raw & or other dangerous chars
+        let id = &entries[0].id;
+        assert!(
+            !id.contains('&') && !id.contains('<') && !id.contains('>'),
+            "Heading id should not contain raw HTML special chars, got: {id}"
+        );
     }
 }

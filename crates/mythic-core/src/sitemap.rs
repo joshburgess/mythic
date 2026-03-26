@@ -260,4 +260,67 @@ mod tests {
         assert!(sitemap.starts_with("<?xml version=\"1.0\""));
         assert!(sitemap.contains("xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\""));
     }
+
+    #[test]
+    fn root_index_page_gets_slash_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages = vec![Page {
+            source_path: PathBuf::from("index.md"),
+            slug: "index".to_string(),
+            frontmatter: Frontmatter {
+                title: "Home".into(),
+                date: Some("2024-01-01".into()),
+                ..Default::default()
+            },
+            raw_content: String::new(),
+            rendered_html: None,
+            output_path: None,
+            content_hash: 0,
+            toc: Vec::new(),
+        }];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        // Should be "https://example.com/" not "https://example.com/index/"
+        assert!(
+            sitemap.contains("<loc>https://example.com/</loc>"),
+            "Index page URL should be '/' not '/index/', got: {sitemap}"
+        );
+        assert!(
+            !sitemap.contains("/index/"),
+            "Sitemap should not contain '/index/' for root page"
+        );
+    }
+
+    #[test]
+    fn pages_without_dates_omit_lastmod() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SiteConfig::for_testing("Test", "https://example.com");
+        let pages = vec![Page {
+            source_path: PathBuf::from("about.md"),
+            slug: "about".to_string(),
+            frontmatter: Frontmatter {
+                title: "About".into(),
+                date: None,
+                ..Default::default()
+            },
+            raw_content: String::new(),
+            rendered_html: None,
+            output_path: None,
+            content_hash: 0,
+            toc: Vec::new(),
+        }];
+
+        generate(&config, &pages, dir.path()).unwrap();
+
+        let sitemap = std::fs::read_to_string(dir.path().join("sitemap.xml")).unwrap();
+        assert!(sitemap.contains("https://example.com/about/"));
+        // Page without a date should not have a lastmod tag
+        assert!(
+            !sitemap.contains("<lastmod>"),
+            "Page without date should not have <lastmod>, got: {sitemap}"
+        );
+    }
 }
