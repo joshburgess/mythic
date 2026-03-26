@@ -175,7 +175,7 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], f
     xml.push_str(&format!(
         "  <atom:link href=\"{base_url}/{feed_path}\" rel=\"self\" type=\"application/rss+xml\"/>\n"
     ));
-    xml.push_str(&format!("  <lastBuildDate>{pub_date}</lastBuildDate>\n"));
+    xml.push_str(&format!("  <lastBuildDate>{}</lastBuildDate>\n", to_rfc822(pub_date)));
     xml.push_str(&format!(
         "  <managingEditor>{}</managingEditor>\n",
         escape_xml(author)
@@ -199,7 +199,7 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], f
         ));
         xml.push_str(&format!("    <link>{page_url}</link>\n"));
         xml.push_str(&format!("    <guid>{page_url}</guid>\n"));
-        xml.push_str(&format!("    <pubDate>{date}</pubDate>\n"));
+        xml.push_str(&format!("    <pubDate>{}</pubDate>\n", to_rfc822(date)));
         xml.push_str(&format!(
             "    <description>{}</description>\n",
             escape_xml(&summary)
@@ -273,8 +273,19 @@ fn strip_xml_invalid(s: &str) -> String {
         .collect()
 }
 
+/// Convert an ISO date string (e.g. `2024-01-15`) to RFC 822 format
+/// (`Tue, 15 Jan 2024 00:00:00 +0000`) as required by RSS 2.0.
+fn to_rfc822(date_str: &str) -> String {
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+        date.format("%a, %d %b %Y 00:00:00 +0000").to_string()
+    } else {
+        date_str.to_string()
+    }
+}
+
 fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
     let mut text = String::new();
+    let mut char_count = 0;
     let mut in_tag = false;
 
     for c in html.chars() {
@@ -288,7 +299,8 @@ fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
         }
         if !in_tag {
             text.push(c);
-            if text.len() >= max_chars {
+            char_count += 1;
+            if char_count >= max_chars {
                 text.push_str("...");
                 break;
             }

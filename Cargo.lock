@@ -1922,6 +1922,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "anyhow",
+ "chrono",
  "compact_str",
  "criterion",
  "lasso",

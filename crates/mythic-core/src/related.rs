@@ -61,7 +61,11 @@ pub fn find_related(page: &Page, all_pages: &[Page], limit: usize, base_path: &s
         .map(|(score, p)| RelatedPage {
             title: p.frontmatter.title.to_string(),
             slug: p.slug.clone(),
-            url: format!("{}/{}/", base_path, p.slug),
+            url: if p.slug == "index" {
+                format!("{}/", base_path)
+            } else {
+                format!("{}/{}/", base_path, p.slug)
+            },
             score,
         })
         .collect()
@@ -174,5 +178,20 @@ mod tests {
         ];
         let related = find_related(&target, &all, 10, "");
         assert!(related.is_empty());
+    }
+
+    #[test]
+    fn index_page_gets_root_url() {
+        let target = make_page("a", "Page A", &["rust"]);
+        let all = vec![
+            make_page("a", "Page A", &["rust"]),
+            make_page("index", "Home", &["rust"]),
+            make_page("b", "Page B", &["rust"]),
+        ];
+        let related = find_related(&target, &all, 10, "");
+        let index_related = related.iter().find(|r| r.slug == "index").unwrap();
+        assert_eq!(index_related.url, "/", "index page URL should be root, not /index/");
+        let b_related = related.iter().find(|r| r.slug == "b").unwrap();
+        assert_eq!(b_related.url, "/b/", "non-index pages should have normal URL");
     }
 }

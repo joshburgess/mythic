@@ -170,6 +170,11 @@ fn find_closing_dollar(chars: &[char], start: usize) -> Option<usize> {
     None
 }
 
+/// Check whether rendered HTML contains math elements produced by `transform_math`.
+pub fn has_math(html: &str) -> bool {
+    html.contains("class=\"math ")
+}
+
 /// Generate the KaTeX CSS/JS includes for the HTML head.
 pub fn katex_head_tags() -> &'static str {
     r#"<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">

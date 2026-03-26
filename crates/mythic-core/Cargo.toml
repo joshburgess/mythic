@@ -19,6 +19,7 @@ ahash = "0.8"
 lasso = { version = "0.7", features = ["multi-threaded"] }
 compact_str = { version = "0.8", features = ["serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+chrono.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

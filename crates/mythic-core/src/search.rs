@@ -43,10 +43,16 @@ pub fn generate_search_index(pages: &[Page], output_dir: &Path, base_url: &str) 
                 .map(|t| t.iter().map(|s| s.to_string()).collect())
                 .unwrap_or_default();
 
+            let url = if page.slug == "index" {
+                format!("{base_url}/")
+            } else {
+                format!("{base_url}/{}/", page.slug)
+            };
+
             SearchEntry {
                 title: page.frontmatter.title.to_string(),
                 slug: page.slug.clone(),
-                url: format!("{base_url}/{}/", page.slug),
+                url,
                 summary,
                 tags,
             }
@@ -62,6 +68,7 @@ pub fn generate_search_index(pages: &[Page], output_dir: &Path, base_url: &str) 
 
 fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
     let mut text = String::new();
+    let mut char_count = 0;
     let mut in_tag = false;
 
     for c in html.chars() {
@@ -75,7 +82,8 @@ fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
         }
         if !in_tag {
             text.push(c);
-            if text.len() >= max_chars {
+            char_count += 1;
+            if char_count >= max_chars {
                 text.push_str("...");
                 break;
             }
@@ -168,5 +176,50 @@ mod tests {
         let summary = json[0]["summary"].as_str().unwrap();
         assert!(summary.len() <= 210); // 200 + "..."
         assert!(summary.ends_with("..."));
+    }
+
+    #[test]
+    fn index_page_gets_root_url_in_search_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let pages = vec![
+            test_page("Home", "index", "Welcome to my site", vec![]),
+            test_page("About", "about", "About page", vec![]),
+        ];
+
+        generate_search_index(&pages, dir.path(), "https://example.com").unwrap();
+
+        let json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("search-index.json")).unwrap(),
+        )
+        .unwrap();
+        let arr = json.as_array().unwrap();
+        let index_entry = arr.iter().find(|e| e["slug"] == "index").unwrap();
+        assert_eq!(
+            index_entry["url"], "https://example.com/",
+            "index page URL should be root, not /index/"
+        );
+        let about_entry = arr.iter().find(|e| e["slug"] == "about").unwrap();
+        assert_eq!(about_entry["url"], "https://example.com/about/");
+    }
+
+    #[test]
+    fn truncation_uses_chars_not_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        // Use multi-byte characters to verify char-based truncation
+        let multibyte_content = "\u{00e9}".repeat(300); // e-acute, 2 bytes per char
+        let pages = vec![test_page("Multi", "multi", &multibyte_content, vec![])];
+
+        generate_search_index(&pages, dir.path(), "https://example.com").unwrap();
+
+        let json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("search-index.json")).unwrap(),
+        )
+        .unwrap();
+        let summary = json[0]["summary"].as_str().unwrap();
+        // Should truncate at 200 characters, not 200 bytes
+        // 200 e-acute chars = 400 bytes, plus "..." = 403 bytes
+        // If using bytes, would truncate at 100 chars (200 bytes) + "..."
+        let char_count = summary.chars().count();
+        assert_eq!(char_count, 203, "should be 200 chars + 3 for '...'");
     }
 }

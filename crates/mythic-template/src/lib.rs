@@ -10,6 +10,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
 
+const KATEX_CSS: &str = "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css";
+const KATEX_JS: &str = "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js";
+const KATEX_AUTO_RENDER_JS: &str = "https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js";
+
 /// Multi-engine template renderer.
 pub struct TemplateEngine {
     tera: tera::Tera,
@@ -177,6 +181,9 @@ impl TemplateEngine {
 
         let mut ctx = tera::Context::new();
         // Build page context from frontmatter plus slug and url
+        let rendered_html = page.rendered_html.as_deref().unwrap_or("");
+        let has_math = rendered_html.contains("class=\"math ");
+
         let mut page_ctx = serde_json::to_value(&page.frontmatter).unwrap_or_default();
         if let serde_json::Value::Object(ref mut map) = page_ctx {
             map.insert(
@@ -187,9 +194,13 @@ impl TemplateEngine {
                 "url".to_string(),
                 serde_json::Value::String(format!("{}/{}/", config.base_path(), page.slug)),
             );
+            map.insert(
+                "has_math".to_string(),
+                serde_json::Value::Bool(has_math),
+            );
         }
         ctx.insert("page", &page_ctx);
-        ctx.insert("content", page.rendered_html.as_deref().unwrap_or(""));
+        ctx.insert("content", rendered_html);
         ctx.insert("toc", &page.toc);
 
         let mut site = HashMap::new();
@@ -197,6 +208,10 @@ impl TemplateEngine {
         site.insert("base_url", config.base_url.as_str());
         site.insert("base_path", config.base_path());
         ctx.insert("site", &site);
+
+        ctx.insert("katex_css", KATEX_CSS);
+        ctx.insert("katex_js", KATEX_JS);
+        ctx.insert("katex_auto_render_js", KATEX_AUTO_RENDER_JS);
 
         if let Some(assets) = assets {
             ctx.insert("assets", assets);
@@ -224,6 +239,9 @@ impl TemplateEngine {
     ) -> Result<String> {
         let template_name = format!("{layout}.hbs");
 
+        let rendered_html = page.rendered_html.as_deref().unwrap_or("");
+        let has_math = rendered_html.contains("class=\"math ");
+
         let mut data = serde_json::Map::new();
         // Build page context from frontmatter plus slug and url
         let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
@@ -236,11 +254,15 @@ impl TemplateEngine {
                 "url".to_string(),
                 serde_json::Value::String(format!("{}/{}/", config.base_path(), page.slug)),
             );
+            map.insert(
+                "has_math".to_string(),
+                serde_json::Value::Bool(has_math),
+            );
         }
         data.insert("page".to_string(), page_ctx);
         data.insert(
             "content".to_string(),
-            serde_json::Value::String(page.rendered_html.as_deref().unwrap_or("").to_string()),
+            serde_json::Value::String(rendered_html.to_string()),
         );
         data.insert("toc".to_string(), serde_json::to_value(&page.toc)?);
 
@@ -258,6 +280,10 @@ impl TemplateEngine {
             serde_json::Value::String(config.base_path().to_string()),
         );
         data.insert("site".to_string(), serde_json::Value::Object(site));
+
+        data.insert("katex_css".to_string(), serde_json::Value::String(KATEX_CSS.to_string()));
+        data.insert("katex_js".to_string(), serde_json::Value::String(KATEX_JS.to_string()));
+        data.insert("katex_auto_render_js".to_string(), serde_json::Value::String(KATEX_AUTO_RENDER_JS.to_string()));
 
         if let Some(assets) = assets {
             data.insert("assets".to_string(), assets.clone());

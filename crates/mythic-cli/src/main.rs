@@ -59,7 +59,7 @@ enum Commands {
     Init {
         /// Project name
         name: String,
-        /// Starter template: blank, blog, docs, portfolio
+        /// Starter template: blank, blog, docs, minimal, portfolio
         #[arg(short, long, default_value = "blank")]
         template: String,
     },
@@ -170,7 +170,7 @@ fn main() -> Result<()> {
             cmd_new(&config, &content_type, &title, draft)?;
         }
         Commands::Check { config } => {
-            let site_config = mythic_core::config::load_config(&config)?;
+            let site_config = load_config_with_validation(&config, false)?;
             let root = config.parent().unwrap_or_else(|| Path::new("."));
             let output_dir = root.join(&site_config.output_dir);
 
@@ -406,6 +406,14 @@ fn load_config_with_validation(
                 for key in sass.keys() {
                     if !known_sass_keys.contains(&key.as_str()) {
                         eprintln!("  {} unrecognized key '{}' in [sass]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(lint)) = table.get("lint") {
+                let known_lint_keys = ["enabled", "min_word_count", "max_word_count", "required_fields", "require_tags", "require_date", "max_start_heading"];
+                for key in lint.keys() {
+                    if !known_lint_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [lint]", "warning:".yellow().bold(), key.yellow());
                     }
                 }
             }
@@ -886,6 +894,7 @@ fn full_build(
         &pages_for_output,
         &output_dir,
         &site_config.base_url,
+        site_config.ugly_urls,
     )?;
     if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
@@ -979,7 +988,11 @@ fn full_build(
                             Some(&assets_value),
                             Some(&extra_value),
                         ) {
-                            let dest = output_dir.join(&slug).join("index.html");
+                            let dest = if site_config.ugly_urls {
+                                output_dir.join(format!("{slug}.html"))
+                            } else {
+                                output_dir.join(&slug).join("index.html")
+                            };
                             if let Some(parent) = dest.parent() {
                                 std::fs::create_dir_all(parent)?;
                             }
@@ -1005,7 +1018,11 @@ fn full_build(
                         serde_json::json!({
                             "name": term.name,
                             "slug": term.slug,
-                            "url": format!("{}/{}/{}/", bp, taxonomy.config.slug, term.slug),
+                            "url": if bp.is_empty() {
+                                format!("/{}/{}/", taxonomy.config.slug, term.slug)
+                            } else {
+                                format!("{}/{}/{}/", bp, taxonomy.config.slug, term.slug)
+                            },
                             "count": term.pages.len(),
                         })
                     }).collect();
@@ -1021,7 +1038,11 @@ fn full_build(
             if let Ok(html) =
                 engine.render_full(&page, site_config, Some(&assets_value), Some(&render_data))
             {
-                let dest = output_dir.join(&page.slug).join("index.html");
+                let dest = if site_config.ugly_urls {
+                    output_dir.join(format!("{}.html", page.slug))
+                } else {
+                    output_dir.join(&page.slug).join("index.html")
+                };
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
@@ -1102,9 +1123,14 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
 
     let rebuild_tx = reload_tx.clone();
     let rebuild_config_path = root.join("mythic.toml");
+    // The initial value is always overwritten by load_config_with_validation
+    // on the first loop iteration, but we need an initialized value for the
+    // closure capture. The clone is required because site_config is used later
+    // for the server call.
+    #[allow(unused_assignments)]
     let mut rebuild_config = site_config.clone();
     let rebuild_root = root.clone();
-    std::thread::spawn(move || {
+    std::thread::spawn(#[allow(unused_assignments)] move || {
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
