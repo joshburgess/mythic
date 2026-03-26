@@ -153,6 +153,11 @@ where
             let file = output_dir.join(format!("{}.html", page.slug));
             let dir = file.parent().unwrap_or(&output_dir).to_path_buf();
             to_write.push(WriteJob { page, dir, file });
+        } else if page.slug == "index" {
+            // Root index: content/index.md → output_dir/index.html (not output_dir/index/index.html)
+            let dir = output_dir.to_path_buf();
+            let file = output_dir.join("index.html");
+            to_write.push(WriteJob { page, dir, file });
         } else {
             // Clean URLs: slug "blog/post" → output_dir/blog/post/index.html
             let dir = output_dir.join(&page.slug);
