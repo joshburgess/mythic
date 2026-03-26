@@ -89,6 +89,22 @@ fn discover_html_files(dir: &Path) -> Vec<std::path::PathBuf> {
         .collect()
 }
 
+/// Normalize a path by resolving `.` and `..` components without touching
+/// the filesystem. This ensures consistent behaviour across platforms.
+fn normalize_path(path: &Path) -> std::path::PathBuf {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                components.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => components.push(other),
+        }
+    }
+    components.iter().collect()
+}
+
 fn check_internal_links(
     html: &str,
     source_file: &str,
@@ -129,6 +145,10 @@ fn check_internal_links(
                 .unwrap_or(std::path::Path::new(""));
             output_dir.join(parent).join(clean_link)
         };
+
+        // Normalize the path to resolve `..` and `.` components portably
+        // (Path::join does not resolve these on all platforms).
+        let target = normalize_path(&target);
 
         // Check if the target exists (try as file, directory/index.html)
         let exists = target.exists()

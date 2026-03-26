@@ -551,11 +551,12 @@ fn format_template_error(err: &anyhow::Error) -> String {
 // --- mythic new command ---
 
 fn pluralize_simple(word: &str) -> String {
-    if word.ends_with("s")
+    if word.ends_with('z') {
+        format!("{word}zes")
+    } else if word.ends_with("s")
         || word.ends_with("sh")
         || word.ends_with("ch")
         || word.ends_with("x")
-        || word.ends_with("z")
     {
         format!("{word}es")
     } else if word.ends_with("y")
@@ -1343,7 +1344,7 @@ mod tests {
         assert_eq!(pluralize_simple("bush"), "bushes");
         assert_eq!(pluralize_simple("match"), "matches");
         assert_eq!(pluralize_simple("box"), "boxes");
-        assert_eq!(pluralize_simple("quiz"), "quizes");
+        assert_eq!(pluralize_simple("quiz"), "quizzes");
     }
 
     #[test]

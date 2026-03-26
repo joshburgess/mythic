@@ -90,16 +90,13 @@ pub fn write_deploy_manifest(output_dir: &Path, diff: &DiffResult) -> Result<Pat
     Ok(path)
 }
 
+fn stable_hash(content: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(content);
+    format!("{:x}", hash)[..16].to_string()
+}
+
 fn build_manifest(output_dir: &Path) -> Result<DiffManifest> {
-    use std::hash::{BuildHasher, Hasher};
-
-    let hash_state = ahash::RandomState::with_seeds(
-        0x12345678_9abcdef0,
-        0xfedcba98_76543210,
-        0x0a1b2c3d_4e5f6a7b,
-        0x8c9daebf_0c1d2e3f,
-    );
-
     let mut files = HashMap::new();
 
     for entry in WalkDir::new(output_dir)
@@ -120,10 +117,7 @@ fn build_manifest(output_dir: &Path) -> Result<DiffManifest> {
         }
 
         if let Ok(content) = std::fs::read(path) {
-            let mut hasher = hash_state.build_hasher();
-            std::hash::Hash::hash_slice(&content, &mut hasher);
-            let hash = format!("{:x}", hasher.finish());
-            files.insert(rel, hash);
+            files.insert(rel, stable_hash(&content));
         }
     }
 

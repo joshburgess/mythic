@@ -53,10 +53,16 @@ pub fn render_json(page: &Page, base_url: &str) -> String {
         .map(|t| t.iter().map(|s| s.to_string()).collect())
         .unwrap_or_default();
 
+    let url = if page.slug == "index" {
+        format!("{base_url}/")
+    } else {
+        format!("{base_url}/{}/", page.slug)
+    };
+
     let json = PageJson {
         title: page.frontmatter.title.to_string(),
         slug: page.slug.clone(),
-        url: format!("{base_url}/{}/", page.slug),
+        url,
         date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
         tags,
         content: content.to_string(),
@@ -109,7 +115,11 @@ pub fn generate_api_index(pages: &[Page], output_dir: &Path, base_url: &str) -> 
             serde_json::json!({
                 "title": p.frontmatter.title.as_str(),
                 "slug": &p.slug,
-                "url": format!("{base_url}/{}/", p.slug),
+                "url": if p.slug == "index" {
+                    format!("{base_url}/")
+                } else {
+                    format!("{base_url}/{}/", p.slug)
+                },
                 "date": p.frontmatter.date.as_deref(),
             })
         })

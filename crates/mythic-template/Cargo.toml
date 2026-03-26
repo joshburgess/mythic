@@ -10,7 +10,7 @@ repository.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tera = "1"
+tera.workspace = true
 handlebars = "6"
 walkdir = "2"
 pulldown-cmark = { version = "0.12", features = ["html"] }
