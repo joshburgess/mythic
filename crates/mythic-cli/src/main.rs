@@ -932,15 +932,14 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
-            // Reload config from disk on config changes (or any change,
-            // since templates/styles may reference config values)
-            if matches!(event, mythic_server::watcher::WatchEvent::ConfigChanged) {
-                match load_config_with_validation(&rebuild_config_path, true) {
-                    Ok(new_config) => rebuild_config = new_config,
-                    Err(e) => {
-                        eprintln!("  {} {e}", "Config error:".red().bold());
-                        continue;
-                    }
+            // Always re-read config before rebuilding — it's cheap and
+            // ensures config changes are picked up regardless of how the
+            // watcher classifies the event.
+            match load_config_with_validation(&rebuild_config_path, true) {
+                Ok(new_config) => rebuild_config = new_config,
+                Err(e) => {
+                    eprintln!("  {} {e}", "Config error:".red().bold());
+                    continue;
                 }
             }
 
