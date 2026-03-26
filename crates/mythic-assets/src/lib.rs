@@ -59,7 +59,8 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
             let minified = styles::minify_css(&css);
             manifest.css_integrity = Some(compute_sri(&minified));
             let path = styles::write_hashed(&minified, &output_dir)?;
-            manifest.css_path = Some(format!("/{path}"));
+            let bp = config.base_path();
+            manifest.css_path = Some(format!("{bp}/{path}"));
         }
     }
 
@@ -71,7 +72,8 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
             let minified = scripts::minify_js(&js);
             manifest.js_integrity = Some(compute_sri(&minified));
             let path = scripts::write_hashed(&minified, &output_dir)?;
-            manifest.js_path = Some(format!("/{path}"));
+            let bp = config.base_path();
+            manifest.js_path = Some(format!("{bp}/{path}"));
         }
     }
 

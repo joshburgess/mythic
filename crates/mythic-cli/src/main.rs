@@ -330,6 +330,7 @@ fn load_config_with_validation(
             "ugly_urls",
             "remote",
             "lint",
+            "base_path",
         ];
         if !quiet {
             for key in table.keys() {
@@ -548,7 +549,7 @@ fn full_build(
                 serde_json::json!({
                     "title": p.frontmatter.title.as_str(),
                     "slug": &p.slug,
-                    "url": format!("/{}/", p.slug),
+                    "url": format!("{}/{}/", site_config.base_path(), p.slug),
                     "date": p.frontmatter.date.as_deref(),
                     "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
                 })
@@ -573,7 +574,7 @@ fn full_build(
                     .push(serde_json::json!({
                         "title": p.frontmatter.title.as_str(),
                         "slug": &p.slug,
-                        "url": format!("/{}/", p.slug),
+                        "url": format!("{}/{}/", site_config.base_path(), p.slug),
                         "date": p.frontmatter.date.as_deref(),
                     }));
             }

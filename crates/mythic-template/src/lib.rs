@@ -178,6 +178,7 @@ impl TemplateEngine {
         let mut site = HashMap::new();
         site.insert("title", config.title.as_str());
         site.insert("base_url", config.base_url.as_str());
+        site.insert("base_path", config.base_path());
         ctx.insert("site", &site);
 
         if let Some(assets) = assets {
@@ -222,6 +223,10 @@ impl TemplateEngine {
         site.insert(
             "base_url".to_string(),
             serde_json::Value::String(config.base_url.clone()),
+        );
+        site.insert(
+            "base_path".to_string(),
+            serde_json::Value::String(config.base_path().to_string()),
         );
         data.insert("site".to_string(), serde_json::Value::Object(site));
 
