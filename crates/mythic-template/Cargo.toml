@@ -12,6 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 tera.workspace = true
 handlebars = "6"
+minijinja = { version = "2", features = ["json"] }
 walkdir = "2"
 pulldown-cmark = { version = "0.12", features = ["html"] }
 mythic-core = { path = "../mythic-core" }
