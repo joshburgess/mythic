@@ -1532,4 +1532,245 @@ mod tests {
         assert!(html.contains("Test Page"));
         assert!(html.contains("<p>Hello world</p>"));
     }
+
+    #[test]
+    fn minijinja_template_inheritance() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("base.jinja"),
+            concat!(
+                "<!DOCTYPE html><html><head><title>{% block title %}Default{% endblock %}</title></head>",
+                "<body>{% block body %}{% endblock %}</body></html>",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("child.jinja"),
+            concat!(
+                "{% extends \"base.jinja\" %}",
+                "{% block title %}{{ page.title }}{% endblock %}",
+                "{% block body %}<article>{{ content }}</article>{% endblock %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("child");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<!DOCTYPE html>"), "Got: {html}");
+        assert!(html.contains("<title>Test Page</title>"), "Got: {html}");
+        assert!(
+            html.contains("<article><p>Hello world</p></article>"),
+            "Got: {html}"
+        );
+    }
+
+    #[test]
+    fn minijinja_includes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("header.jinja"),
+            "<header>{{ site.title }}</header>",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("withinclude.jinja"),
+            concat!(
+                "{% include \"header.jinja\" %}",
+                "<main>{{ content }}</main>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("withinclude");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("<header>My Site</header>"), "Got: {html}");
+        assert!(
+            html.contains("<main><p>Hello world</p></main>"),
+            "Got: {html}"
+        );
+    }
+
+    #[test]
+    fn minijinja_for_loops_and_conditionals() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("looptest.jinja"),
+            concat!(
+                "{% for tag in page.tags %}[{{ tag }}]{% endfor %}",
+                "{% if page.date %}DATE:{{ page.date }}{% endif %}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("looptest");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("[rust]"), "Got: {html}");
+        assert!(html.contains("[web]"), "Got: {html}");
+        assert!(html.contains("[ssg]"), "Got: {html}");
+        assert!(html.contains("DATE:2025-06-15"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_has_math_and_katex() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("mathpage.jinja"),
+            concat!(
+                "{% if page.has_math %}MATH_DETECTED{% endif %}",
+                "<link href=\"{{ katex_css }}\">",
+                "<script src=\"{{ katex_js }}\"></script>",
+                "<script src=\"{{ katex_auto_render_js }}\"></script>",
+                "{{ content }}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("mathpage");
+        page.rendered_html = Some(
+            "<p>Inline math: <span class=\"math math-inline\">x^2</span></p>".to_string(),
+        );
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("MATH_DETECTED"), "Got: {html}");
+        assert!(html.contains("katex.min.css"), "Got: {html}");
+        assert!(html.contains("katex.min.js"), "Got: {html}");
+        assert!(html.contains("auto-render.min.js"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_missing_template_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = test_config();
+
+        // Use default engine = minijinja so the missing layout routes through minijinja
+        let engine = TemplateEngine::new_with_default(dir.path(), "minijinja").unwrap();
+        let page = test_page("missing");
+        let result = engine.render(&page, &config);
+        assert!(result.is_err(), "Expected error for missing template");
+    }
+
+    #[test]
+    fn minijinja_syntax_error_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("broken.jinja"),
+            "{% if %}<p>bad syntax</p>",
+        )
+        .unwrap();
+
+        let result = TemplateEngine::new(dir.path());
+        assert!(
+            result.is_err(),
+            "Expected error for template with syntax error"
+        );
+    }
+
+    #[test]
+    fn minijinja_j2_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("page.j2"),
+            "<html><body><h1>{{ page.title }}</h1>{{ content }}</body></html>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("page");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("Test Page"), "Got: {html}");
+        assert!(html.contains("<p>Hello world</p>"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_jinja2_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("page.jinja2"),
+            "<html><body><h1>{{ page.title }}</h1>{{ content }}</body></html>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("page");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("Test Page"), "Got: {html}");
+        assert!(html.contains("<p>Hello world</p>"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_data_context() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("datactx.jinja"),
+            concat!(
+                "<p>Pages: {{ data.pages | length }}</p>",
+                "<p>Sections: {{ data.sections | length }}</p>",
+                "{% if data.paginator %}PAG{% endif %}",
+                "{% if data.terms %}TERMS{% endif %}",
+                "{{ content }}",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("datactx");
+        let config = test_config();
+
+        let data = serde_json::json!({
+            "pages": [
+                {"title": "Page One", "slug": "page-one"},
+                {"title": "Page Two", "slug": "page-two"},
+            ],
+            "sections": [
+                {"name": "blog"},
+            ],
+            "paginator": {"current": 1, "total": 3},
+            "terms": [
+                {"name": "rust", "count": 5},
+            ]
+        });
+
+        let html = engine
+            .render_full(&page, &config, None, Some(&data))
+            .unwrap();
+
+        assert!(html.contains("<p>Pages: 2</p>"), "Got: {html}");
+        assert!(html.contains("<p>Sections: 1</p>"), "Got: {html}");
+        assert!(html.contains("PAG"), "Got: {html}");
+        assert!(html.contains("TERMS"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_truncate_words_filter_with_kwargs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("trunc.jinja"),
+            "{{ content | truncate_words(count=3) }}",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let mut page = test_page("trunc");
+        page.rendered_html = Some("one two three four five six".to_string());
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+
+        assert!(html.contains("one two three..."), "Got: {html}");
+        assert!(!html.contains("four"), "Got: {html}");
+    }
 }
