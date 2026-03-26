@@ -104,9 +104,11 @@ where
 
     let total_pages = pages.len();
 
-    // Load incremental cache
+    // Load incremental cache and check environment (templates, config, styles, etc.)
     let output_dir = root.join(&config.output_dir);
     let mut cache = DepGraph::load(&output_dir);
+    let env_hash = crate::cache::compute_env_hash(root, config);
+    cache.check_env(env_hash);
 
     // Render markdown
     let t1 = Instant::now();

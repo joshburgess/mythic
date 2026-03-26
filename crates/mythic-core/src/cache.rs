@@ -1,8 +1,13 @@
 //! Incremental build cache using content hashes.
+//!
+//! Tracks per-page content hashes for incremental builds and an environment
+//! hash covering templates, config, styles, scripts, and shortcodes. When any
+//! non-content file changes, the entire cache is invalidated.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 const CACHE_FILENAME: &str = ".mythic-cache.json";
@@ -11,6 +16,10 @@ const CACHE_FILENAME: &str = ".mythic-cache.json";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepGraph {
     hashes: HashMap<String, u64>,
+    /// Hash of all non-content files (templates, config, styles, scripts, shortcodes).
+    /// When this changes, the entire page cache is invalidated.
+    #[serde(default)]
+    env_hash: u64,
     #[serde(skip)]
     path: PathBuf,
 }
@@ -29,7 +38,17 @@ impl DepGraph {
         }
         DepGraph {
             hashes: HashMap::new(),
+            env_hash: 0,
             path,
+        }
+    }
+
+    /// Check the environment hash and invalidate all page hashes if it changed.
+    /// Should be called once after loading, before any `is_changed` calls.
+    pub fn check_env(&mut self, current_env_hash: u64) {
+        if self.env_hash != current_env_hash {
+            self.hashes.clear();
+            self.env_hash = current_env_hash;
         }
     }
 
@@ -59,6 +78,54 @@ impl DepGraph {
             .with_context(|| format!("Failed to write cache: {}", self.path.display()))?;
         Ok(())
     }
+}
+
+/// Compute an environment hash from all non-content files that affect the build
+/// output: templates, config, styles, scripts, and shortcodes.
+pub fn compute_env_hash(root: &Path, config: &crate::config::SiteConfig) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+
+    let dirs_to_hash = [
+        root.join(&config.template_dir),
+        root.join(&config.styles_dir),
+        root.join(&config.scripts_dir),
+        root.join("shortcodes"),
+    ];
+
+    // Hash the config file itself
+    let config_path = root.join("mythic.toml");
+    if let Ok(content) = std::fs::read(&config_path) {
+        config_path.to_string_lossy().hash(&mut hasher);
+        content.hash(&mut hasher);
+    }
+
+    // Hash all files in template, style, script, and shortcode directories
+    for dir in &dirs_to_hash {
+        if !dir.exists() {
+            continue;
+        }
+        if let Ok(walker) = walkdir_sorted(dir) {
+            for entry in walker {
+                if let Ok(content) = std::fs::read(entry.path()) {
+                    entry.path().to_string_lossy().hash(&mut hasher);
+                    content.hash(&mut hasher);
+                }
+            }
+        }
+    }
+
+    hasher.finish()
+}
+
+/// Walk a directory and return file entries sorted by path for deterministic hashing.
+fn walkdir_sorted(dir: &Path) -> Result<Vec<walkdir::DirEntry>> {
+    let mut entries: Vec<walkdir::DirEntry> = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .collect();
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -117,6 +184,28 @@ mod tests {
     }
 
     #[test]
+    fn env_hash_invalidates_all_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut graph = DepGraph::load(dir.path());
+        graph.env_hash = 100;
+        graph.record("page-a", 111);
+        graph.record("page-b", 222);
+        graph.save().unwrap();
+
+        let mut reloaded = DepGraph::load(dir.path());
+        // Same env hash — pages should be cached
+        reloaded.check_env(100);
+        assert!(!reloaded.is_changed("page-a", 111));
+        assert!(!reloaded.is_changed("page-b", 222));
+
+        // Different env hash — all pages should be invalidated
+        let mut reloaded2 = DepGraph::load(dir.path());
+        reloaded2.check_env(999);
+        assert!(reloaded2.is_changed("page-a", 111));
+        assert!(reloaded2.is_changed("page-b", 222));
+    }
+
+    #[test]
     fn cache_with_many_entries() {
         let dir = tempfile::tempdir().unwrap();
         let mut graph = DepGraph::load(dir.path());
@@ -139,8 +228,6 @@ mod tests {
 
     #[test]
     fn cache_is_a_plain_hashmap() {
-        // Verify that the cache is just a HashMap and behaves as expected
-        // with overwrites
         let dir = tempfile::tempdir().unwrap();
         let mut graph = DepGraph::load(dir.path());
 
