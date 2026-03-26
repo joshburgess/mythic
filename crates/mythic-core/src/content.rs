@@ -62,6 +62,15 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
 
         let (mut frontmatter, body) = mythic_markdown_parse_stub(&raw);
 
+        // If title is empty, default to filename stem
+        if frontmatter.title.is_empty() {
+            frontmatter.title = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+                .into();
+        }
+
         // Intern repeated strings to deduplicate heap allocations
         intern_frontmatter(&interner, &mut frontmatter);
 
@@ -336,6 +345,33 @@ mod tests {
         let config = fixture_config();
         let pages = discover_content(&config, dir.path()).unwrap();
         assert_eq!(pages.len(), 1);
+    }
+
+    #[test]
+    fn empty_title_defaults_to_filename_stem() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // File with no frontmatter at all — title will be empty
+        std::fs::write(content.join("my-post.md"), "Just body content").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "my-post");
+    }
+
+    #[test]
+    fn empty_title_in_frontmatter_defaults_to_filename_stem() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("about.md"), "---\ntitle: \"\"\n---\nBody").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "about");
     }
 
     #[test]

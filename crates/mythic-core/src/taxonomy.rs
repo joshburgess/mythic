@@ -215,6 +215,7 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config
     }
@@ -261,11 +262,13 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config.taxonomies.push(TaxonomyConfig {
             name: "categories".to_string(),
             slug: "category".to_string(),
             feed: false,
+            per_page: 10,
         });
 
         let mut pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
@@ -526,6 +529,7 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
 
         let pages = vec![page_with_tags("Post", "my-post", vec!["rust"], None)];

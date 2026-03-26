@@ -254,6 +254,7 @@ fn main() -> Result<()> {
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
                 .to_path_buf();
+            let config_path = root.join("mythic.toml");
 
             full_build(&site_config, &root, drafts, false, quiet, false)?;
 
@@ -266,6 +267,13 @@ fn main() -> Result<()> {
                 if !quiet {
                     println!("  {} {event:?}", "Change detected:".cyan());
                 }
+                let site_config = match load_config_with_validation(&config_path, quiet) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("  {} {e}", "Config error:".red().bold());
+                        continue;
+                    }
+                };
                 if let Err(e) = full_build(&site_config, &root, drafts, false, quiet, false) {
                     eprintln!("  {} {e}", "Build error:".red().bold());
                 }
@@ -341,6 +349,76 @@ fn load_config_with_validation(
                         key.yellow(),
                         path.display()
                     );
+                }
+            }
+
+            // Check nested section keys for typos
+            if let Some(toml::Value::Table(feed)) = table.get("feed") {
+                let known_feed_keys = ["title", "author", "entries"];
+                for key in feed.keys() {
+                    if !known_feed_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [feed]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(highlight)) = table.get("highlight") {
+                let known_highlight_keys = ["theme", "line_numbers"];
+                for key in highlight.keys() {
+                    if !known_highlight_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [highlight]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(toc)) = table.get("toc") {
+                let known_toc_keys = ["min_level", "max_level"];
+                for key in toc.keys() {
+                    if !known_toc_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [toc]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(sitemap)) = table.get("sitemap") {
+                let known_sitemap_keys = ["enabled", "changefreq"];
+                for key in sitemap.keys() {
+                    if !known_sitemap_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [sitemap]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(templates)) = table.get("templates") {
+                let known_templates_keys = ["default_engine"];
+                for key in templates.keys() {
+                    if !known_templates_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [templates]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(i18n)) = table.get("i18n") {
+                let known_i18n_keys = ["default_locale", "locales"];
+                for key in i18n.keys() {
+                    if !known_i18n_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [i18n]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Table(sass)) = table.get("sass") {
+                let known_sass_keys = ["enabled"];
+                for key in sass.keys() {
+                    if !known_sass_keys.contains(&key.as_str()) {
+                        eprintln!("  {} unrecognized key '{}' in [sass]", "warning:".yellow().bold(), key.yellow());
+                    }
+                }
+            }
+            if let Some(toml::Value::Array(taxonomies)) = table.get("taxonomies") {
+                let known_taxonomy_keys = ["name", "slug", "feed", "per_page"];
+                for (i, entry) in taxonomies.iter().enumerate() {
+                    if let toml::Value::Table(t) = entry {
+                        for key in t.keys() {
+                            if !known_taxonomy_keys.contains(&key.as_str()) {
+                                eprintln!("  {} unrecognized key '{}' in [[taxonomies]] entry {}", "warning:".yellow().bold(), key.yellow(), i + 1);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -464,6 +542,26 @@ fn format_template_error(err: &anyhow::Error) -> String {
 
 // --- mythic new command ---
 
+fn pluralize_simple(word: &str) -> String {
+    if word.ends_with("s")
+        || word.ends_with("sh")
+        || word.ends_with("ch")
+        || word.ends_with("x")
+        || word.ends_with("z")
+    {
+        format!("{word}es")
+    } else if word.ends_with("y")
+        && !word.ends_with("ay")
+        && !word.ends_with("ey")
+        && !word.ends_with("oy")
+        && !word.ends_with("uy")
+    {
+        format!("{}ies", &word[..word.len() - 1])
+    } else {
+        format!("{word}s")
+    }
+}
+
 fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path.parent().unwrap_or_else(|| Path::new("."));
@@ -484,7 +582,7 @@ fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> 
     let dir = if content_type == "page" {
         content_dir.clone()
     } else {
-        content_dir.join(format!("{content_type}s"))
+        content_dir.join(pluralize_simple(content_type))
     };
 
     std::fs::create_dir_all(&dir)?;
@@ -551,7 +649,11 @@ fn full_build(
                 serde_json::json!({
                     "title": p.frontmatter.title.as_str(),
                     "slug": &p.slug,
-                    "url": format!("{}/{}/", site_config.base_path(), p.slug),
+                    "url": if p.slug == "index" {
+                        format!("{}/", site_config.base_path())
+                    } else {
+                        format!("{}/{}/", site_config.base_path(), p.slug)
+                    },
                     "date": p.frontmatter.date.as_deref(),
                     "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
                 })
@@ -576,7 +678,11 @@ fn full_build(
                     .push(serde_json::json!({
                         "title": p.frontmatter.title.as_str(),
                         "slug": &p.slug,
-                        "url": format!("{}/{}/", site_config.base_path(), p.slug),
+                        "url": if p.slug == "index" {
+                            format!("{}/", site_config.base_path())
+                        } else {
+                            format!("{}/{}/", site_config.base_path(), p.slug)
+                        },
                         "date": p.frontmatter.date.as_deref(),
                     }));
             }
@@ -632,11 +738,9 @@ fn full_build(
     let shortcode_dir = root.join("shortcodes");
     let has_shortcodes = shortcode_dir.exists();
     let shortcode_engine = mythic_markdown::shortcodes::ShortcodeEngine::new(&shortcode_dir);
+    let computed_engine = mythic_core::computed::ComputedEngine::new();
 
-    // Copy all static files to output, preserving directory structure.
-    // This runs before image/asset processing so optimized versions can overwrite.
     let static_dir = root.join(&site_config.static_dir);
-    copy_static_dir(&static_dir, &output_dir)?;
 
     let assets_manifest = mythic_assets::process_assets(site_config, root)?;
     let mut template_extra = serde_json::Map::new();
@@ -680,7 +784,7 @@ fn full_build(
             mythic_core::summary::extract_summaries(pages);
 
             // Evaluate computed frontmatter fields (rhai: expressions)
-            mythic_core::computed::evaluate_computed_fields(pages);
+            computed_engine.evaluate(pages);
 
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
@@ -798,6 +902,18 @@ fn full_build(
     if !site_config.taxonomies.is_empty() {
         let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &pages_for_output);
 
+        // Check for taxonomy slug collisions with content pages
+        for taxonomy in &taxonomies {
+            if let Some(page) = pages_for_output.iter().find(|p| p.slug == taxonomy.config.slug) {
+                eprintln!(
+                    "  {} taxonomy slug '{}' collides with content page at {}",
+                    "warning:".yellow().bold(),
+                    taxonomy.config.slug.yellow(),
+                    page.source_path.display(),
+                );
+            }
+        }
+
         // Render taxonomy listing pages
         let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
         for mut page in taxonomy_pages {
@@ -806,15 +922,15 @@ fn full_build(
             // For term pages, generate paginated versions
             let is_term_page = page.frontmatter.layout.as_deref() == Some("taxonomy_term");
             if is_term_page {
-                // Find the matching term to get its pages
+                // Find the matching term and its taxonomy config to get per_page
                 let term_data = taxonomies.iter().find_map(|t| {
                     t.terms.iter().find(|term| {
                         let expected_slug = format!("{}/{}", t.config.slug, term.slug);
                         page.slug == expected_slug
-                    })
+                    }).map(|term| (term, t.config.per_page))
                 });
 
-                if let Some(term) = term_data {
+                if let Some((term, per_page)) = term_data {
                     // Create lightweight pages for pagination from term's page refs
                     let term_pages: Vec<mythic_core::page::Page> = term
                         .pages
@@ -837,9 +953,9 @@ fn full_build(
 
                     let paginated = mythic_core::pagination::paginate(
                         &term_pages,
-                        10,
+                        per_page,
                         &page.slug,
-                        &site_config.base_url,
+                        site_config.base_path(),
                     );
 
                     for (page_num, paginator) in &paginated {
@@ -920,6 +1036,9 @@ fn full_build(
 
     // Generate sitemap and robots.txt
     mythic_core::sitemap::generate(site_config, &pages_for_output, &output_dir)?;
+
+    // Copy user's static files AFTER all generated files so user files take precedence.
+    copy_static_dir(&static_dir, &output_dir)?;
 
     plugin_manager.run_post_build(&report)?;
 
@@ -1179,4 +1298,39 @@ fn extract_embedded_dir(dir: &include_dir::Dir, dest: &Path) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pluralize_regular_words() {
+        assert_eq!(pluralize_simple("post"), "posts");
+        assert_eq!(pluralize_simple("page"), "pages");
+        assert_eq!(pluralize_simple("tag"), "tags");
+    }
+
+    #[test]
+    fn pluralize_sibilant_endings() {
+        assert_eq!(pluralize_simple("class"), "classes");
+        assert_eq!(pluralize_simple("bush"), "bushes");
+        assert_eq!(pluralize_simple("match"), "matches");
+        assert_eq!(pluralize_simple("box"), "boxes");
+        assert_eq!(pluralize_simple("quiz"), "quizes");
+    }
+
+    #[test]
+    fn pluralize_consonant_y() {
+        assert_eq!(pluralize_simple("category"), "categories");
+        assert_eq!(pluralize_simple("gallery"), "galleries");
+    }
+
+    #[test]
+    fn pluralize_vowel_y_unchanged() {
+        assert_eq!(pluralize_simple("day"), "days");
+        assert_eq!(pluralize_simple("key"), "keys");
+        assert_eq!(pluralize_simple("boy"), "boys");
+        assert_eq!(pluralize_simple("guy"), "guys");
+    }
 }

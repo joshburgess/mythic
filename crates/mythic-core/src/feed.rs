@@ -31,7 +31,7 @@ pub fn generate_feeds(
         &config.base_url,
         feed_config.author.as_deref().unwrap_or(&config.title),
         &feed_pages,
-        &config.base_url,
+        "feed.xml",
     );
 
     let feed_path = output_dir.join("feed.xml");
@@ -44,6 +44,7 @@ pub fn generate_feeds(
         &config.base_url,
         feed_config.author.as_deref().unwrap_or(&config.title),
         &feed_pages,
+        "rss.xml",
     );
     std::fs::write(output_dir.join("rss.xml"), &rss_xml)?;
 
@@ -53,6 +54,7 @@ pub fn generate_feeds(
         &config.base_url,
         feed_config.author.as_deref().unwrap_or(&config.title),
         &feed_pages,
+        "feed.json",
     );
     std::fs::write(output_dir.join("feed.json"), &json_feed)?;
 
@@ -77,12 +79,13 @@ pub fn generate_feeds(
             sorted.truncate(feed_config.entries);
 
             let feed_title = format!("{} — {}", feed_config.title, term.name);
+            let term_feed_path = format!("{}/{}/feed.xml", taxonomy.config.slug, term.slug);
             let feed_xml = render_atom_feed(
                 &feed_title,
                 &config.base_url,
                 feed_config.author.as_deref().unwrap_or(&config.title),
                 &sorted,
-                &config.base_url,
+                &term_feed_path,
             );
 
             let term_dir = output_dir.join(&taxonomy.config.slug).join(&term.slug);
@@ -99,7 +102,7 @@ fn render_atom_feed(
     base_url: &str,
     author: &str,
     pages: &[&Page],
-    _site_url: &str,
+    feed_path: &str,
 ) -> String {
     let base_url = base_url.trim_end_matches('/');
 
@@ -115,7 +118,7 @@ fn render_atom_feed(
     xml.push_str("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n");
     xml.push_str(&format!("  <title>{}</title>\n", escape_xml(title)));
     xml.push_str(&format!(
-        "  <link href=\"{base_url}/feed.xml\" rel=\"self\"/>\n"
+        "  <link href=\"{base_url}/{feed_path}\" rel=\"self\"/>\n"
     ));
     xml.push_str(&format!("  <link href=\"{base_url}/\"/>\n"));
     xml.push_str(&format!("  <updated>{updated_rfc}</updated>\n"));
@@ -156,7 +159,7 @@ fn render_atom_feed(
     xml
 }
 
-fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -> String {
+fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], feed_path: &str) -> String {
     let base_url = base_url.trim_end_matches('/');
     let pub_date = pages
         .first()
@@ -170,7 +173,7 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -
     xml.push_str(&format!("  <title>{}</title>\n", escape_xml(title)));
     xml.push_str(&format!("  <link>{base_url}/</link>\n"));
     xml.push_str(&format!(
-        "  <atom:link href=\"{base_url}/rss.xml\" rel=\"self\" type=\"application/rss+xml\"/>\n"
+        "  <atom:link href=\"{base_url}/{feed_path}\" rel=\"self\" type=\"application/rss+xml\"/>\n"
     ));
     xml.push_str(&format!("  <lastBuildDate>{pub_date}</lastBuildDate>\n"));
     xml.push_str(&format!(
@@ -209,7 +212,7 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -
     xml
 }
 
-fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -> String {
+fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], feed_path: &str) -> String {
     let base_url = base_url.trim_end_matches('/');
 
     let items: Vec<serde_json::Value> = pages
@@ -238,7 +241,7 @@ fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) 
         "version": "https://jsonfeed.org/version/1.1",
         "title": title,
         "home_page_url": format!("{base_url}/"),
-        "feed_url": format!("{base_url}/feed.json"),
+        "feed_url": format!("{base_url}/{feed_path}"),
         "authors": [{ "name": author }],
         "items": items,
     });
@@ -340,6 +343,7 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config
     }

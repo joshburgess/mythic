@@ -284,7 +284,7 @@ pub fn reload_channel() -> (
     broadcast::Sender<ReloadMessage>,
     broadcast::Receiver<ReloadMessage>,
 ) {
-    broadcast::channel(16)
+    broadcast::channel(64)
 }
 
 #[cfg(test)]

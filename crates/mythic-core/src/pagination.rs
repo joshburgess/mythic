@@ -40,13 +40,13 @@ pub fn paginate(
     pages: &[Page],
     per_page: usize,
     base_slug: &str,
-    base_url: &str,
+    base_path: &str,
 ) -> Vec<(usize, Paginator)> {
     if per_page == 0 || pages.is_empty() {
         return Vec::new();
     }
 
-    let base_url = base_url.trim_end_matches('/');
+    let base_path = base_path.trim_end_matches('/');
     let total_items = pages.len();
     let total_pages = total_items.div_ceil(per_page);
 
@@ -62,22 +62,22 @@ pub fn paginate(
                 title: p.frontmatter.title.to_string(),
                 slug: p.slug.clone(),
                 date: p.frontmatter.date.as_ref().map(|d| d.to_string()),
-                url: format!("{base_url}/{}/", p.slug),
+                url: format!("{base_path}/{}/", p.slug),
             })
             .collect();
 
         let prev_url = if page_num > 1 {
             if page_num == 2 {
-                Some(format!("{base_url}/{base_slug}/"))
+                Some(format!("{base_path}/{base_slug}/"))
             } else {
-                Some(format!("{base_url}/{base_slug}/page/{}/", page_num - 1))
+                Some(format!("{base_path}/{base_slug}/page/{}/", page_num - 1))
             }
         } else {
             None
         };
 
         let next_url = if page_num < total_pages {
-            Some(format!("{base_url}/{base_slug}/page/{}/", page_num + 1))
+            Some(format!("{base_path}/{base_slug}/page/{}/", page_num + 1))
         } else {
             None
         };
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn basic_pagination() {
         let pages = make_pages(25);
-        let result = paginate(&pages, 10, "blog", "https://example.com");
+        let result = paginate(&pages, 10, "blog", "");
 
         assert_eq!(result.len(), 3);
 
@@ -147,18 +147,12 @@ mod tests {
         assert_eq!(p1.total_pages, 3);
         assert_eq!(p1.total_items, 25);
         assert!(p1.prev_url.is_none());
-        assert_eq!(
-            p1.next_url.as_deref(),
-            Some("https://example.com/blog/page/2/")
-        );
+        assert_eq!(p1.next_url.as_deref(), Some("/blog/page/2/"));
 
         let (_, p2) = &result[1];
         assert_eq!(p2.pages.len(), 10);
-        assert_eq!(p2.prev_url.as_deref(), Some("https://example.com/blog/"));
-        assert_eq!(
-            p2.next_url.as_deref(),
-            Some("https://example.com/blog/page/3/")
-        );
+        assert_eq!(p2.prev_url.as_deref(), Some("/blog/"));
+        assert_eq!(p2.next_url.as_deref(), Some("/blog/page/3/"));
 
         let (_, p3) = &result[2];
         assert_eq!(p3.pages.len(), 5);
@@ -168,7 +162,7 @@ mod tests {
     #[test]
     fn single_page_no_pagination() {
         let pages = make_pages(5);
-        let result = paginate(&pages, 10, "blog", "https://example.com");
+        let result = paginate(&pages, 10, "blog", "");
 
         assert_eq!(result.len(), 1);
         let (_, p) = &result[0];
@@ -179,14 +173,14 @@ mod tests {
 
     #[test]
     fn empty_pages() {
-        let result = paginate(&[], 10, "blog", "https://example.com");
+        let result = paginate(&[], 10, "blog", "");
         assert!(result.is_empty());
     }
 
     #[test]
     fn exact_page_boundary() {
         let pages = make_pages(20);
-        let result = paginate(&pages, 10, "blog", "https://example.com");
+        let result = paginate(&pages, 10, "blog", "");
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].1.pages.len(), 10);
         assert_eq!(result[1].1.pages.len(), 10);
@@ -202,7 +196,7 @@ mod tests {
     #[test]
     fn per_page_one() {
         let pages = make_pages(3);
-        let result = paginate(&pages, 1, "blog", "https://example.com");
+        let result = paginate(&pages, 1, "blog", "");
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].1.pages.len(), 1);
         assert_eq!(result[1].1.pages.len(), 1);
@@ -210,9 +204,9 @@ mod tests {
     }
 
     #[test]
-    fn page_urls_use_base_url() {
+    fn page_urls_use_base_path() {
         let pages = make_pages(5);
-        let result = paginate(&pages, 10, "blog", "https://mysite.org");
-        assert_eq!(result[0].1.pages[0].url, "https://mysite.org/post-0/");
+        let result = paginate(&pages, 10, "blog", "/blog");
+        assert_eq!(result[0].1.pages[0].url, "/blog/post-0/");
     }
 }

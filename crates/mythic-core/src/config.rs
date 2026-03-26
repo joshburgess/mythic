@@ -97,6 +97,12 @@ pub struct TaxonomyConfig {
     pub slug: String,
     #[serde(default)]
     pub feed: bool,
+    #[serde(default = "default_per_page")]
+    pub per_page: usize,
+}
+
+fn default_per_page() -> usize {
+    10
 }
 
 /// Feed (Atom/RSS) configuration.
@@ -363,6 +369,22 @@ mod tests {
         assert!(config.taxonomies[0].feed);
         assert_eq!(config.taxonomies[1].slug, "cat");
         assert!(!config.taxonomies[1].feed);
+    }
+
+    #[test]
+    fn taxonomy_per_page_default() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[[taxonomies]]\nname = \"tags\"\nslug = \"tags\"\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.taxonomies[0].per_page, 10);
+    }
+
+    #[test]
+    fn taxonomy_per_page_custom() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[[taxonomies]]\nname = \"tags\"\nslug = \"tags\"\nper_page = 25\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.taxonomies[0].per_page, 25);
     }
 
     #[test]

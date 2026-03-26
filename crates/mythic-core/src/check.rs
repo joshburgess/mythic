@@ -179,10 +179,9 @@ fn check_heading_hierarchy(html: &str, source_file: &str, report: &mut CheckRepo
                 continue;
             }
 
-            // Check if this is an opening tag (not </h>)
-            if i > 0 && bytes[i - 1] == b'/' {
-                continue;
-            }
+            // Note: closing tags like </h1> are already excluded by the
+            // outer condition requiring bytes[i+1] == b'h', since in </h1>
+            // bytes[i+1] is b'/' not b'h'. No explicit check needed.
 
             if let Some(prev) = last_level {
                 if level > prev + 1 {

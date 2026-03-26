@@ -76,7 +76,14 @@ fn process_with_engine(content: &str, tera: &Tera) -> Result<String> {
     Ok(result)
 }
 
+/// Count the number of consecutive backticks starting at the beginning of `s`.
+fn count_backticks(s: &str) -> usize {
+    s.bytes().take_while(|&b| b == b'`').count()
+}
+
 /// Extract fenced code blocks and replace with placeholders.
+/// Handles fences of 3 or more backticks; the closing fence must have
+/// at least as many backticks as the opening fence.
 fn extract_code_blocks(content: &str) -> (String, Vec<String>) {
     let mut protected = String::with_capacity(content.len());
     let mut blocks = Vec::new();
@@ -85,11 +92,18 @@ fn extract_code_blocks(content: &str) -> (String, Vec<String>) {
     while let Some(start) = remaining.find("```") {
         protected.push_str(&remaining[..start]);
 
-        let after_open = &remaining[start + 3..];
-        // Find the closing ```
-        if let Some(close) = after_open.find("\n```") {
-            // Include everything from opening ``` to closing ``` plus the newline after
-            let block_end = start + 3 + close + 4; // ``` + content + \n```
+        // Count opening backticks (3 or more)
+        let fence_len = count_backticks(&remaining[start..]);
+        let fence_str = &remaining[start..start + fence_len];
+
+        let after_open = &remaining[start + fence_len..];
+        // Find a closing fence: newline followed by at least `fence_len` backticks
+        let closing_pattern = format!("\n{fence_str}");
+        if let Some(close) = after_open.find(&closing_pattern) {
+            // The closing fence may have more backticks; consume them all
+            let close_start = close + 1; // skip the newline
+            let close_backticks = count_backticks(&after_open[close_start..]);
+            let block_end = start + fence_len + close + 1 + close_backticks;
             let full_block = &remaining[start..block_end];
             let placeholder = format!("\x00CODE_BLOCK_{}\x00", blocks.len());
             blocks.push(full_block.to_string());
@@ -437,5 +451,47 @@ mod tests {
             err_msg.contains("maximum depth") || err_msg.contains("circular"),
             "Error message should mention depth limit, got: {err_msg}"
         );
+    }
+
+    #[test]
+    fn shortcode_in_four_backtick_code_block_not_expanded() {
+        let tera = setup_tera(&[("youtube.html", "<iframe></iframe>")]);
+        let input = "````\n{{% youtube id=\"abc\" %}}\n````";
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(
+            result.contains("{{% youtube"),
+            "Shortcode inside 4-backtick code block should not be expanded, got: {result}"
+        );
+        assert!(
+            !result.contains("<iframe>"),
+            "Shortcode template should NOT be rendered inside 4-backtick code block"
+        );
+    }
+
+    #[test]
+    fn shortcode_in_five_backtick_code_block_not_expanded() {
+        let tera = setup_tera(&[("youtube.html", "<iframe></iframe>")]);
+        let input = "`````\n{{% youtube id=\"abc\" %}}\n`````";
+        let result = process_with_engine(input, &tera).unwrap();
+        assert!(
+            result.contains("{{% youtube"),
+            "Shortcode inside 5-backtick code block should not be expanded, got: {result}"
+        );
+    }
+
+    #[test]
+    fn extract_code_blocks_triple_backtick() {
+        let (protected, blocks) = extract_code_blocks("before\n```\ncode\n```\nafter");
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].contains("code"));
+        assert!(protected.contains("after"));
+    }
+
+    #[test]
+    fn extract_code_blocks_quad_backtick() {
+        let (protected, blocks) = extract_code_blocks("before\n````\ncode with ```\n````\nafter");
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].contains("code with ```"));
+        assert!(protected.contains("after"));
     }
 }

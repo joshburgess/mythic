@@ -16,72 +16,104 @@
 use crate::page::Page;
 use rhai::packages::Package;
 
-/// Evaluate computed frontmatter fields for all pages.
+/// A cached Rhai engine for evaluating computed frontmatter fields.
 ///
-/// Scans `page.extra` for string values starting with `rhai:`,
-/// evaluates the expression with page context, and replaces the
-/// value with the result.
-pub fn evaluate_computed_fields(pages: &mut [Page]) {
-    let mut engine = rhai::Engine::new_raw();
+/// Create once and reuse across builds to avoid the cost of
+/// re-registering packages and configuring limits each time.
+pub struct ComputedEngine {
+    engine: rhai::Engine,
+}
 
-    // Register only safe packages — no file I/O or system access
-    engine.register_global_module(rhai::packages::ArithmeticPackage::new().as_shared_module());
-    engine.register_global_module(rhai::packages::BasicStringPackage::new().as_shared_module());
-    engine.register_global_module(rhai::packages::MoreStringPackage::new().as_shared_module());
-    engine.register_global_module(rhai::packages::LogicPackage::new().as_shared_module());
-    engine.register_global_module(rhai::packages::BasicMathPackage::new().as_shared_module());
-    engine.register_global_module(rhai::packages::LanguageCorePackage::new().as_shared_module());
+impl ComputedEngine {
+    /// Create a new computed engine with safe packages registered.
+    pub fn new() -> Self {
+        let mut engine = rhai::Engine::new_raw();
 
-    // Prevent infinite loops and deeply nested expressions
-    engine.set_max_operations(10_000);
-    engine.set_max_expr_depths(32, 32);
+        // Register only safe packages — no file I/O or system access
+        engine
+            .register_global_module(rhai::packages::ArithmeticPackage::new().as_shared_module());
+        engine.register_global_module(
+            rhai::packages::BasicStringPackage::new().as_shared_module(),
+        );
+        engine
+            .register_global_module(rhai::packages::MoreStringPackage::new().as_shared_module());
+        engine.register_global_module(rhai::packages::LogicPackage::new().as_shared_module());
+        engine
+            .register_global_module(rhai::packages::BasicMathPackage::new().as_shared_module());
+        engine.register_global_module(
+            rhai::packages::LanguageCorePackage::new().as_shared_module(),
+        );
 
-    for page in pages.iter_mut() {
-        let extra = match page.frontmatter.extra.as_mut() {
-            Some(e) => e,
-            None => continue,
-        };
+        // Prevent infinite loops and deeply nested expressions
+        engine.set_max_operations(10_000);
+        engine.set_max_expr_depths(32, 32);
 
-        let word_count = page.raw_content.split_whitespace().count() as i64;
-        let slug = page.slug.clone();
-        let title = page.frontmatter.title.to_string();
+        Self { engine }
+    }
 
-        // Collect keys that need evaluation (can't mutate while iterating)
-        let computed_keys: Vec<(String, String)> = extra
-            .iter()
-            .filter_map(|(k, v)| {
-                v.as_str().and_then(|s| {
-                    s.strip_prefix("rhai:")
-                        .map(|expr| (k.clone(), expr.trim().to_string()))
+    /// Evaluate computed frontmatter fields for all pages.
+    ///
+    /// Scans `page.extra` for string values starting with `rhai:`,
+    /// evaluates the expression with page context, and replaces the
+    /// value with the result.
+    pub fn evaluate(&self, pages: &mut [Page]) {
+        for page in pages.iter_mut() {
+            let extra = match page.frontmatter.extra.as_mut() {
+                Some(e) => e,
+                None => continue,
+            };
+
+            let word_count = page.raw_content.split_whitespace().count() as i64;
+            let slug = page.slug.clone();
+            let title = page.frontmatter.title.to_string();
+
+            // Collect keys that need evaluation (can't mutate while iterating)
+            let computed_keys: Vec<(String, String)> = extra
+                .iter()
+                .filter_map(|(k, v)| {
+                    v.as_str().and_then(|s| {
+                        s.strip_prefix("rhai:")
+                            .map(|expr| (k.clone(), expr.trim().to_string()))
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
-        for (key, expr) in computed_keys {
-            let mut scope = rhai::Scope::new();
-            scope.push("word_count", word_count);
-            scope.push("slug", slug.clone());
-            scope.push("title", title.clone());
-            scope.push("has_date", page.frontmatter.date.is_some());
+            for (key, expr) in computed_keys {
+                let mut scope = rhai::Scope::new();
+                scope.push("word_count", word_count);
+                scope.push("slug", slug.clone());
+                scope.push("title", title.clone());
+                scope.push("has_date", page.frontmatter.date.is_some());
 
-            if let Some(ref date) = page.frontmatter.date {
-                scope.push("date", date.to_string());
-            }
-
-            match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &expr) {
-                Ok(result) => {
-                    let value = dynamic_to_json(&result);
-                    extra.insert(key, value);
+                if let Some(ref date) = page.frontmatter.date {
+                    scope.push("date", date.to_string());
                 }
-                Err(e) => {
-                    eprintln!(
-                        "  Warning: computed field '{}' in '{}' failed: {e}",
-                        key, page.slug
-                    );
+
+                match self.engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &expr) {
+                    Ok(result) => {
+                        let value = dynamic_to_json(&result);
+                        extra.insert(key, value);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "  Warning: computed field '{}' in '{}' failed: {e}",
+                            key, page.slug
+                        );
+                    }
                 }
             }
         }
     }
+}
+
+/// Evaluate computed frontmatter fields for all pages.
+///
+/// Convenience wrapper that creates a temporary engine. For repeated
+/// calls, prefer creating a [`ComputedEngine`] once and calling
+/// [`ComputedEngine::evaluate`].
+pub fn evaluate_computed_fields(pages: &mut [Page]) {
+    let engine = ComputedEngine::new();
+    engine.evaluate(pages);
 }
 
 fn dynamic_to_json(val: &rhai::Dynamic) -> serde_json::Value {

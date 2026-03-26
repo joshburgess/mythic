@@ -86,10 +86,12 @@ pub fn process_i18n(pages: &mut [Page], config: &I18nConfig) {
             .as_deref()
             .unwrap_or(&config.default_locale);
         if locale != config.default_locale {
-            // Strip locale prefix from slug if it came from directory structure
-            let stripped = page
-                .slug
-                .strip_prefix(&format!("{locale}/"))
+            // Strip ANY locale prefix from slug (not just the detected one)
+            // to avoid doubling when frontmatter locale differs from directory locale.
+            let stripped = config
+                .locales
+                .iter()
+                .find_map(|loc| page.slug.strip_prefix(&format!("{loc}/")))
                 .unwrap_or(&page.slug)
                 .to_string();
             page.slug = format!("{locale}/{stripped}");
@@ -306,6 +308,19 @@ mod tests {
         assert_eq!(translations.len(), 1);
         assert_eq!(translations[0].locale, "es");
         assert!(translations[0].url.contains("es/about"));
+    }
+
+    #[test]
+    fn frontmatter_locale_overrides_directory_locale_without_doubling() {
+        let config = test_i18n_config();
+        // Page lives in es/ directory but frontmatter says locale: fr
+        let mut pages = vec![page_with_locale("es/post", Some("fr"))];
+
+        process_i18n(&mut pages, &config);
+
+        // Should be fr/post, NOT fr/es/post
+        assert_eq!(pages[0].slug, "fr/post");
+        assert_eq!(pages[0].frontmatter.locale.as_deref(), Some("fr"));
     }
 
     #[test]
