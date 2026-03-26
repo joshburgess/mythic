@@ -14,6 +14,7 @@
 //! ```
 
 use crate::page::Page;
+use rhai::packages::Package;
 
 /// Evaluate computed frontmatter fields for all pages.
 ///
@@ -21,7 +22,19 @@ use crate::page::Page;
 /// evaluates the expression with page context, and replaces the
 /// value with the result.
 pub fn evaluate_computed_fields(pages: &mut [Page]) {
-    let engine = rhai::Engine::new();
+    let mut engine = rhai::Engine::new_raw();
+
+    // Register only safe packages — no file I/O or system access
+    engine.register_global_module(rhai::packages::ArithmeticPackage::new().as_shared_module());
+    engine.register_global_module(rhai::packages::BasicStringPackage::new().as_shared_module());
+    engine.register_global_module(rhai::packages::MoreStringPackage::new().as_shared_module());
+    engine.register_global_module(rhai::packages::LogicPackage::new().as_shared_module());
+    engine.register_global_module(rhai::packages::BasicMathPackage::new().as_shared_module());
+    engine.register_global_module(rhai::packages::LanguageCorePackage::new().as_shared_module());
+
+    // Prevent infinite loops and deeply nested expressions
+    engine.set_max_operations(10_000);
+    engine.set_max_expr_depths(32, 32);
 
     for page in pages.iter_mut() {
         let extra = match page.frontmatter.extra.as_mut() {

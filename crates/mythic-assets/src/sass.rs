@@ -11,11 +11,19 @@ pub fn compile_and_concat(styles_dir: &Path) -> Result<String> {
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_type().is_file()
-                && matches!(
-                    e.path().extension().and_then(|x| x.to_str()),
-                    Some("css" | "scss" | "sass")
-                )
+            if !e.file_type().is_file() {
+                return false;
+            }
+            let name = e.file_name().to_string_lossy().to_string();
+            // Skip Sass partials (files starting with '_') — they are meant
+            // to be @imported, not compiled independently.
+            if name.starts_with('_') {
+                return false;
+            }
+            matches!(
+                e.path().extension().and_then(|x| x.to_str()),
+                Some("css" | "scss" | "sass")
+            )
         })
         .collect();
 

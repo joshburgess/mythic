@@ -62,7 +62,11 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, base_path: &str, pages: &[Page]) -> T
                 title: page.frontmatter.title.to_string(),
                 slug: page.slug.clone(),
                 date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
-                url: format!("{}/{}/", base_path, page.slug),
+                url: if page.slug == "index" {
+                    format!("{}/", base_path)
+                } else {
+                    format!("{}/{}/", base_path, page.slug)
+                },
             });
         }
     }

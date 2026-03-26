@@ -191,7 +191,19 @@ async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<ReloadMess
 
 async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Request) -> Response {
     let path = req.uri().path();
+    let canonical_output = state
+        .output_dir
+        .canonicalize()
+        .unwrap_or_else(|_| state.output_dir.clone());
     let mut file_path = state.output_dir.join(path.trim_start_matches('/'));
+
+    // Check for path traversal
+    if let Ok(canonical_file) = file_path.canonicalize() {
+        if !canonical_file.starts_with(&canonical_output) {
+            return (axum::http::StatusCode::FORBIDDEN, "Forbidden").into_response();
+        }
+    }
+    // If file doesn't exist, canonicalize will fail, which is fine — it'll 404 naturally
 
     // Clean URL: /about/ → /about/index.html
     if file_path.is_dir() || !file_path.exists() {

@@ -1,8 +1,7 @@
 //! CSS concatenation and minification.
 
 use anyhow::{Context, Result};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 
 /// Concatenate all `.css` files in the directory tree (sorted by path for deterministic output).
@@ -89,8 +88,8 @@ pub fn minify_css(css: &str) -> String {
             // Only emit a space if not adjacent to a special char
             let last = out.chars().last();
             let next = chars.peek().copied();
-            let skip = matches!(last, Some('{' | '}' | ';' | ':' | ',' | '>' | '+' | '~'))
-                || matches!(next, Some('{' | '}' | ';' | ':' | ',' | '>' | '+' | '~'));
+            let skip = matches!(last, Some('{' | '}' | ';' | ',' | '>' | '+' | '~'))
+                || matches!(next, Some('{' | '}' | ';' | ',' | '>' | '+' | '~'));
             if !skip && !out.is_empty() && next.is_some() {
                 out.push(' ');
             }
@@ -104,11 +103,8 @@ pub fn minify_css(css: &str) -> String {
 
 /// Write CSS to a content-hashed file, return the relative path.
 pub fn write_hashed(css: &str, output_dir: &Path) -> Result<String> {
-    let hash = {
-        let mut h = DefaultHasher::new();
-        css.hash(&mut h);
-        format!("{:x}", h.finish())
-    };
+    let digest = Sha256::digest(css.as_bytes());
+    let hash = &format!("{:x}", digest)[..16];
 
     let filename = format!("styles-{hash}.css");
     let dest = output_dir.join(&filename);
@@ -151,7 +147,7 @@ h1 {
         let minified = minify_css(css);
         assert!(!minified.contains("/*"));
         assert!(!minified.contains("Main styles"));
-        assert!(minified.contains("margin:0"));
+        assert!(minified.contains("margin: 0"));
         assert!(minified.contains("body{"));
     }
 

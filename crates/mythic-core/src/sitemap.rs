@@ -60,11 +60,11 @@ fn generate_sitemap(
         } else {
             format!("{base_url}/{}/", page.slug)
         };
-        let lastmod = page.frontmatter.date.as_deref().unwrap_or("2024-01-01");
-
         xml.push_str("  <url>\n");
         xml.push_str(&format!("    <loc>{url}</loc>\n"));
-        xml.push_str(&format!("    <lastmod>{lastmod}</lastmod>\n"));
+        if let Some(date) = &page.frontmatter.date {
+            xml.push_str(&format!("    <lastmod>{date}</lastmod>\n"));
+        }
         xml.push_str(&format!("    <changefreq>{changefreq}</changefreq>\n"));
         xml.push_str("  </url>\n");
     }

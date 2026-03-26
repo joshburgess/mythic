@@ -51,12 +51,20 @@ fn process_with_engine(content: &str, tera: &Tera) -> Result<String> {
     let mut result = protected;
 
     // Process paired shortcodes first (they may contain self-closing ones)
+    const MAX_SHORTCODE_DEPTH: usize = 10;
+    let mut iterations = 0;
     loop {
+        if iterations >= MAX_SHORTCODE_DEPTH {
+            anyhow::bail!(
+                "Shortcode expansion exceeded maximum depth of {MAX_SHORTCODE_DEPTH} — possible circular reference"
+            );
+        }
         let before = result.clone();
         result = process_paired(&result, tera)?;
         if result == before {
             break;
         }
+        iterations += 1;
     }
 
     // Then self-closing shortcodes

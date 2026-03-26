@@ -633,6 +633,11 @@ fn full_build(
     let has_shortcodes = shortcode_dir.exists();
     let shortcode_engine = mythic_markdown::shortcodes::ShortcodeEngine::new(&shortcode_dir);
 
+    // Copy all static files to output, preserving directory structure.
+    // This runs before image/asset processing so optimized versions can overwrite.
+    let static_dir = root.join(&site_config.static_dir);
+    copy_static_dir(&static_dir, &output_dir)?;
+
     let assets_manifest = mythic_assets::process_assets(site_config, root)?;
     let mut template_extra = serde_json::Map::new();
     template_extra.insert(
@@ -746,12 +751,12 @@ fn full_build(
 
     // --- Post-build ---
 
-    let non_draft_pages = built_pages;
+    let pages_for_output = built_pages;
 
     // Detect duplicate slugs
     {
         let mut seen = std::collections::HashMap::new();
-        for page in &non_draft_pages {
+        for page in &pages_for_output {
             if let Some(prev) = seen.insert(&page.slug, &page.source_path) {
                 eprintln!(
                     "  {} duplicate slug '{}': {} and {}",
@@ -774,7 +779,7 @@ fn full_build(
 
     // Generate redirect pages from aliases
     let redirect_count = mythic_core::redirects::generate_redirects(
-        &non_draft_pages,
+        &pages_for_output,
         &output_dir,
         &site_config.base_url,
     )?;
@@ -784,14 +789,14 @@ fn full_build(
 
     // Generate search index
     mythic_core::search::generate_search_index(
-        &non_draft_pages,
+        &pages_for_output,
         &output_dir,
         &site_config.base_url,
     )?;
 
     // Generate taxonomy pages with pagination
     if !site_config.taxonomies.is_empty() {
-        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
+        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &pages_for_output);
 
         // Render taxonomy listing pages
         let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
@@ -908,13 +913,13 @@ fn full_build(
             }
         }
 
-        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &taxonomies, &output_dir)?;
+        mythic_core::feed::generate_feeds(site_config, &pages_for_output, &taxonomies, &output_dir)?;
     } else if site_config.feed.is_some() {
-        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
+        mythic_core::feed::generate_feeds(site_config, &pages_for_output, &[], &output_dir)?;
     }
 
     // Generate sitemap and robots.txt
-    mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
+    mythic_core::sitemap::generate(site_config, &pages_for_output, &output_dir)?;
 
     plugin_manager.run_post_build(&report)?;
 
@@ -933,6 +938,28 @@ fn full_build(
         );
     }
 
+    Ok(())
+}
+
+/// Recursively copy all files from `src` to `dest`, preserving directory structure.
+fn copy_static_dir(src: &Path, dest: &Path) -> Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+    for entry in walkdir::WalkDir::new(src)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let rel = entry.path().strip_prefix(src)?;
+        let target = dest.join(rel);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(entry.path(), &target)?;
+    }
     Ok(())
 }
 
@@ -1028,6 +1055,18 @@ static STARTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../starters");
 
 fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
+
+    // Refuse to overwrite an existing non-empty directory
+    if root.exists()
+        && std::fs::read_dir(&root)
+            .map(|mut d| d.next().is_some())
+            .unwrap_or(false)
+    {
+        anyhow::bail!(
+            "Directory '{}' already exists and is not empty. Use a different name or remove it first.",
+            root.display()
+        );
+    }
 
     // First try filesystem starters (development), then embedded starters
     let starters_dir = find_starters_dir();

@@ -1,8 +1,7 @@
 //! JavaScript concatenation and minification.
 
 use anyhow::{Context, Result};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 
 /// Concatenate all `.js` files in the directory tree (sorted by path for deterministic output).
@@ -37,6 +36,12 @@ pub fn concat_js(scripts_dir: &Path) -> Result<String> {
 
 /// Basic JS minification: strip single-line comments, collapse whitespace.
 /// Preserves string literals and template literals.
+///
+/// **Limitation:** Regex literals (`/pattern/flags`) are not recognized. A regex
+/// literal that starts with `//` will be mis-parsed as a single-line comment,
+/// and one starting with `/*` as a block comment. If your JavaScript relies on
+/// regex literals, pre-minify the file with a full-featured tool (e.g. esbuild,
+/// terser) before passing it to Mythic.
 pub fn minify_js(js: &str) -> String {
     let mut out = String::with_capacity(js.len());
     let mut chars = js.chars().peekable();
@@ -137,11 +142,8 @@ pub fn minify_js(js: &str) -> String {
 
 /// Write JS to a content-hashed file, return the relative path.
 pub fn write_hashed(js: &str, output_dir: &Path) -> Result<String> {
-    let hash = {
-        let mut h = DefaultHasher::new();
-        js.hash(&mut h);
-        format!("{:x}", h.finish())
-    };
+    let digest = Sha256::digest(js.as_bytes());
+    let hash = &format!("{:x}", digest)[..16];
 
     let filename = format!("scripts-{hash}.js");
     let dest = output_dir.join(&filename);

@@ -53,6 +53,7 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
     for path in &paths {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read: {}", path.display()))?;
+        let raw = raw.strip_prefix('\u{FEFF}').unwrap_or(&raw).to_string();
 
         let content_hash = hash_state.hash_one(&raw);
 
@@ -343,12 +344,14 @@ mod tests {
         let content = dir.path().join("content");
         std::fs::create_dir_all(&content).unwrap();
         let mut bom_content = vec![0xEF, 0xBB, 0xBF];
-        bom_content.extend_from_slice(b"# Hello BOM");
+        bom_content.extend_from_slice(b"---\ntitle: BOM Post\n---\nBody after BOM");
         std::fs::write(content.join("bom.md"), bom_content).unwrap();
 
         let config = fixture_config();
         let pages = discover_content(&config, dir.path()).unwrap();
         assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "BOM Post");
+        assert_eq!(pages[0].raw_content, "Body after BOM");
     }
 
     #[test]

@@ -101,6 +101,8 @@ fn render_atom_feed(
     pages: &[&Page],
     _site_url: &str,
 ) -> String {
+    let base_url = base_url.trim_end_matches('/');
+
     let updated = pages
         .first()
         .and_then(|p| p.frontmatter.date.as_deref())
@@ -144,7 +146,7 @@ fn render_atom_feed(
         xml.push_str(&format!("    <updated>{date_rfc}</updated>\n"));
         xml.push_str(&format!("    <published>{date_rfc}</published>\n"));
         xml.push_str(&format!(
-            "    <summary>{}</summary>\n",
+            "    <summary type=\"text\">{}</summary>\n",
             escape_xml(&summary)
         ));
         xml.push_str("  </entry>\n");

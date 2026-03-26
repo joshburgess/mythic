@@ -97,9 +97,60 @@ fn read_cache(path: &Path, ttl: Duration) -> Option<Value> {
     serde_json::from_str(&content).ok()
 }
 
+/// Check if a hostname resolves to or matches a private/internal IP range.
+fn is_private_host(host: &str) -> bool {
+    let host_lower = host.to_lowercase();
+
+    // Block obvious private hostnames
+    if host_lower == "localhost"
+        || host_lower == "[::1]"
+        || host_lower == "0.0.0.0"
+        || host_lower.ends_with(".local")
+        || host_lower.ends_with(".internal")
+    {
+        return true;
+    }
+
+    // Block private IP ranges by pattern
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return match ip {
+            std::net::IpAddr::V4(v4) => {
+                let octets = v4.octets();
+                matches!(
+                    octets,
+                    [127, ..] | [10, ..] | [192, 168, ..] | [169, 254, ..] | [0, ..]
+                ) || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+            }
+            std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+        };
+    }
+
+    false
+}
+
 fn fetch_url(url: &str) -> Result<Value> {
-    let response =
-        reqwest::blocking::get(url).with_context(|| format!("Failed to fetch: {url}"))?;
+    // Validate URL and block private/internal addresses (SSRF prevention)
+    let parsed: reqwest::Url =
+        url.parse().with_context(|| format!("Invalid URL: {url}"))?;
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("URL has no host: {url}"))?;
+
+    if is_private_host(host) {
+        anyhow::bail!("Blocked request to private/internal address: {url}");
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .with_context(|| "Failed to build HTTP client")?;
+
+    let response = client
+        .get(url)
+        .send()
+        .with_context(|| format!("Failed to fetch: {url}"))?;
 
     let status = response.status();
     if !status.is_success() {
