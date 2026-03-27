@@ -545,6 +545,15 @@ fn format_template_error(err: &anyhow::Error) -> String {
         return format!("{} {msg}", "Template error:".red().bold());
     }
 
+    // Extract useful info from MiniJinja errors
+    if msg.contains("Failed to render MiniJinja") || msg.contains("MiniJinja template") {
+        if let Some(cause) = msg.split("Caused by:").nth(1) {
+            let cause = cause.trim();
+            return format!("{} {cause}", "Template error:".red().bold());
+        }
+        return format!("{} {msg}", "Template error:".red().bold());
+    }
+
     msg
 }
 

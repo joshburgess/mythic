@@ -6,7 +6,7 @@ A fast, batteries-included static site generator written in Rust.
 
 - **Fast builds** - Parallel markdown rendering, incremental rebuilds (10k pages in 200ms when unchanged)
 - **Live reload** - Dev server with WebSocket-based hot reload, CSS injection without full page refresh
-- **Multi-engine templates** - Tera and Handlebars side by side in the same project
+- **Multi-engine templates** - Tera, Handlebars, and MiniJinja side by side in the same project
 - **Asset pipeline** - Image optimization (WebP), CSS/JS bundling and minification, Sass/SCSS compilation
 - **Syntax highlighting** - Built-in via syntect with configurable themes and line numbers
 - **Shortcodes** - Custom reusable components as Tera templates with paired and self-closing syntax

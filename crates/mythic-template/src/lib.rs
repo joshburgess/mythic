@@ -193,11 +193,15 @@ impl TemplateEngine {
                         let content = std::fs::read_to_string(path)?;
                         tera.add_raw_template(&rel, &content).ok();
                         let layout_name = rel.trim_end_matches(".tera").to_string();
+                        // Engine-specific extensions override .html default
                         layout_engines.insert(layout_name, "tera".to_string());
                     }
                     "html" => {
                         let layout_name = rel.trim_end_matches(".html").to_string();
-                        layout_engines.insert(layout_name, default_engine.to_string());
+                        // Only set if no engine-specific template has claimed this layout
+                        layout_engines
+                            .entry(layout_name)
+                            .or_insert_with(|| default_engine.to_string());
                         // If default engine is minijinja, also load .html into MiniJinja
                         if default_engine == "minijinja" {
                             let content = std::fs::read_to_string(path)?;
@@ -218,6 +222,7 @@ impl TemplateEngine {
                             .trim_end_matches(".j2")
                             .trim_end_matches(".jinja2")
                             .to_string();
+                        // Engine-specific extensions override .html default
                         layout_engines.insert(layout_name, "minijinja".to_string());
                     }
                     _ => {}
@@ -274,11 +279,12 @@ impl TemplateEngine {
         mj.add_filter("reading_time", |value: String| -> Result<String, minijinja::Error> {
             Ok(compute_reading_time(&value))
         });
-        mj.add_filter("word_count", |value: String| -> Result<String, minijinja::Error> {
-            Ok(compute_word_count(&value).to_string())
+        mj.add_filter("word_count", |value: String| -> Result<usize, minijinja::Error> {
+            Ok(compute_word_count(&value))
         });
         mj.add_filter("truncate_words", |value: String, kwargs: minijinja::value::Kwargs| -> Result<String, minijinja::Error> {
             let count: usize = kwargs.get::<usize>("count").unwrap_or(20);
+            kwargs.assert_all_used()?;
             Ok(compute_truncate_words(&value, count))
         });
         mj.add_filter("markdownify", |value: String| -> Result<String, minijinja::Error> {
