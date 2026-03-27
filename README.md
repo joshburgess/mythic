@@ -59,6 +59,8 @@ mythic serve
 
 Open http://localhost:3000 in your browser. Edit files and see changes instantly.
 
+> **Note:** `mythic serve` automatically overrides `base_url` to `http://localhost:{port}` during development. Keep your production URL in `mythic.toml` — no need to change it for local dev.
+
 ## Commands
 
 ```
@@ -125,15 +127,20 @@ Templates receive these variables:
 |----------|-------------|
 | `{{ page.title }}` | Page title from frontmatter |
 | `{{ page.date }}` | Page date |
+| `{{ page.slug }}` | Page slug (e.g., `posts/my-post`) |
+| `{{ page.url }}` | Page URL with base_path (e.g., `/blog/posts/my-post/`) |
 | `{{ page.tags }}` | Tag list |
+| `{{ page.has_math }}` | Whether page contains math expressions |
 | `{{ page.extra }}` | Custom frontmatter fields |
-| `{{ content \| safe }}` | Rendered HTML content |
+| `{{ content }}` | Rendered HTML content |
 | `{{ site.title }}` | Site title from config |
 | `{{ site.base_url }}` | Base URL from config |
+| `{{ site.base_path }}` | URL path prefix (e.g., `/blog` or empty for root) |
 | `{{ toc }}` | Table of contents entries |
 | `{{ data.paginator }}` | Pagination context (on taxonomy pages) |
-| `{{ assets.css_path }}` | Hashed CSS bundle path |
-| `{{ assets.js_path }}` | Hashed JS bundle path |
+| `{{ data.terms }}` | Taxonomy terms (on taxonomy listing pages) |
+| `{{ assets.css_path }}` | Hashed CSS bundle path (includes base_path) |
+| `{{ assets.js_path }}` | Hashed JS bundle path (includes base_path) |
 | `{{ data }}` | Data from `_data/` files |
 | `{{ data.pages }}` | All pages as array (title, slug, url, date, tags) |
 | `{{ data.sections.blog }}` | Pages grouped by section |
@@ -192,7 +199,7 @@ Cargo workspace with six crates:
 |-------|---------|
 | `mythic-core` | Config, content discovery, build pipeline, caching, plugins |
 | `mythic-markdown` | Frontmatter, pulldown-cmark rendering, shortcodes, TOC, syntax highlighting |
-| `mythic-template` | Tera + Handlebars multi-engine rendering |
+| `mythic-template` | Tera, Handlebars, and MiniJinja multi-engine rendering |
 | `mythic-assets` | Image processing, CSS/JS bundling, Sass compilation |
 | `mythic-server` | Dev server (axum), file watcher, WebSocket live reload |
 | `mythic-cli` | CLI binary (clap) |
