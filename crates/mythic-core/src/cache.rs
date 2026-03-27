@@ -136,6 +136,12 @@ pub fn compute_env_hash(root: &Path, config: &crate::config::SiteConfig) -> u64 
         content.hash(&mut hasher);
     }
 
+    // Hash the effective base_url and base_path so that switching between
+    // mythic build (production URL) and mythic serve (localhost) invalidates
+    // the cache, since these affect asset paths and link URLs in output.
+    config.base_url.hash(&mut hasher);
+    config.base_path().hash(&mut hasher);
+
     // Hash all files in template, style, script, and shortcode directories
     for dir in &dirs_to_hash {
         if !dir.exists() {
