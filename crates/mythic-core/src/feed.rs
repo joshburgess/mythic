@@ -133,8 +133,9 @@ fn render_atom_feed(
         let date_rfc = format!("{date}T00:00:00Z");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -186,8 +187,9 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], f
         let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -221,8 +223,9 @@ fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page], 
             let page_url = format!("{base_url}/{}/", page.slug);
             let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
             let summary = page
-                .rendered_html
+                .body_html
                 .as_deref()
+                .or(page.rendered_html.as_deref())
                 .or(Some(&page.raw_content))
                 .map(|s| strip_html_and_truncate(s, 200))
                 .unwrap_or_default();
@@ -284,11 +287,29 @@ fn to_rfc822(date_str: &str) -> String {
 }
 
 fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
+    // First, remove <script>...</script> and <style>...</style> blocks entirely
+    let mut cleaned = html.to_string();
+    for tag in &["script", "style"] {
+        loop {
+            let open = format!("<{}", tag);
+            let close = format!("</{}>", tag);
+            if let Some(start) = cleaned.to_lowercase().find(&open) {
+                if let Some(end_offset) = cleaned[start..].to_lowercase().find(&close) {
+                    let end = start + end_offset + close.len();
+                    cleaned = format!("{}{}", &cleaned[..start], &cleaned[end..]);
+                    continue;
+                }
+            }
+            break;
+        }
+    }
+
+    // Then strip remaining HTML tags and truncate
     let mut text = String::new();
     let mut char_count = 0;
     let mut in_tag = false;
 
-    for c in html.chars() {
+    for c in cleaned.chars() {
         if c == '<' {
             in_tag = true;
             continue;
@@ -338,6 +359,7 @@ mod tests {
             },
             raw_content: "Some content here".to_string(),
             rendered_html: Some("<p>Some content here</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -455,6 +477,7 @@ mod tests {
             },
             raw_content: "content".to_string(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),

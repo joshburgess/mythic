@@ -122,6 +122,11 @@ where
     render_fn(&mut pages);
     let render_ms = t1.elapsed().as_millis();
 
+    // Save the markdown-rendered body before templates overwrite rendered_html
+    for page in pages.iter_mut() {
+        page.body_html = page.rendered_html.clone();
+    }
+
     // Apply templates in parallel if provided
     let t2 = Instant::now();
     if let Some(ref tmpl_fn) = template_fn {

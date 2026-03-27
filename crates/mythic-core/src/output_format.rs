@@ -157,6 +157,7 @@ mod tests {
             },
             raw_content: "Hello world content here".to_string(),
             rendered_html: Some("<p>Hello world content here</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),

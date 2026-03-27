@@ -30,8 +30,9 @@ pub fn generate_search_index(pages: &[Page], output_dir: &Path, base_url: &str) 
         .filter(|p| !p.source_path.to_string_lossy().starts_with('<'))
         .map(|page| {
             let summary = page
-                .rendered_html
+                .body_html
                 .as_deref()
+                .or(page.rendered_html.as_deref())
                 .or(Some(&page.raw_content))
                 .map(|s| strip_html_and_truncate(s, 200))
                 .unwrap_or_default();
@@ -67,11 +68,29 @@ pub fn generate_search_index(pages: &[Page], output_dir: &Path, base_url: &str) 
 }
 
 fn strip_html_and_truncate(html: &str, max_chars: usize) -> String {
+    // First, remove <script>...</script> and <style>...</style> blocks entirely
+    let mut cleaned = html.to_string();
+    for tag in &["script", "style"] {
+        loop {
+            let open = format!("<{}", tag);
+            let close = format!("</{}>", tag);
+            if let Some(start) = cleaned.to_lowercase().find(&open) {
+                if let Some(end_offset) = cleaned[start..].to_lowercase().find(&close) {
+                    let end = start + end_offset + close.len();
+                    cleaned = format!("{}{}", &cleaned[..start], &cleaned[end..]);
+                    continue;
+                }
+            }
+            break;
+        }
+    }
+
+    // Then strip remaining HTML tags and truncate
     let mut text = String::new();
     let mut char_count = 0;
     let mut in_tag = false;
 
-    for c in html.chars() {
+    for c in cleaned.chars() {
         if c == '<' {
             in_tag = true;
             continue;
@@ -114,6 +133,7 @@ mod tests {
             },
             raw_content: content.to_string(),
             rendered_html: Some(format!("<p>{content}</p>")),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),

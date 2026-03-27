@@ -31,6 +31,10 @@ pub struct Page {
     /// Rendered HTML, populated during the markdown rendering stage.
     /// After template application, this contains the final full-page HTML.
     pub rendered_html: Option<String>,
+    /// The markdown-rendered body HTML before template application.
+    /// Used for feeds and search summaries where only article content is needed.
+    #[serde(default)]
+    pub body_html: Option<String>,
     /// Destination file path, populated during the output stage.
     pub output_path: Option<PathBuf>,
     /// Hash of the raw file content, used for incremental build caching.
