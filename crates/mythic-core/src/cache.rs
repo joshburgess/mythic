@@ -126,6 +126,7 @@ pub fn compute_env_hash(root: &Path, config: &crate::config::SiteConfig) -> u64 
         root.join(&config.template_dir),
         root.join(&config.styles_dir),
         root.join(&config.scripts_dir),
+        root.join(&config.data_dir),
         root.join("shortcodes"),
     ];
 
