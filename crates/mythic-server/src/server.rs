@@ -195,6 +195,17 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
     // Reject any path containing ".." components to prevent traversal before any filesystem ops
     let path_str = path.trim_start_matches('/');
     if path_str.contains("..") {
+        let custom_403 = state.output_dir.join("403.html");
+        if custom_403.exists() {
+            if let Ok(content) = std::fs::read(&custom_403) {
+                return (
+                    axum::http::StatusCode::FORBIDDEN,
+                    [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                    content,
+                )
+                    .into_response();
+            }
+        }
         return (axum::http::StatusCode::FORBIDDEN, "Forbidden").into_response();
     }
 
@@ -231,6 +242,17 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
     let content = match std::fs::read(&file_path) {
         Ok(c) => c,
         Err(_) => {
+            let custom_500 = state.output_dir.join("500.html");
+            if custom_500.exists() {
+                if let Ok(content) = std::fs::read(&custom_500) {
+                    return (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                        content,
+                    )
+                        .into_response();
+                }
+            }
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Read error").into_response()
         }
     };
