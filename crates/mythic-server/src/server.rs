@@ -213,6 +213,18 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
     }
 
     if !file_path.exists() {
+        // Serve custom 404.html if it exists
+        let custom_404 = state.output_dir.join("404.html");
+        if custom_404.exists() {
+            if let Ok(content) = std::fs::read(&custom_404) {
+                return (
+                    axum::http::StatusCode::NOT_FOUND,
+                    [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                    content,
+                )
+                    .into_response();
+            }
+        }
         return (axum::http::StatusCode::NOT_FOUND, "404 Not Found").into_response();
     }
 
