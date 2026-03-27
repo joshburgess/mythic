@@ -1116,13 +1116,23 @@ fn copy_static_dir(src: &Path, dest: &Path) -> Result<()> {
 // --- Dev server ---
 
 async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> Result<()> {
-    let site_config = mythic_core::config::load_config(config_path)?;
+    let mut site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
 
+    // Override base_url for local development so links and assets resolve correctly
+    let dev_base_url = format!("http://localhost:{port}");
+    site_config.base_url = dev_base_url.clone();
+    site_config.resolve_base_path();
+
     println!("{}", "Building site...".dimmed());
+    println!(
+        "  {} base_url overridden to {} for local development",
+        "info:".cyan(),
+        dev_base_url,
+    );
     if !drafts {
         println!("  {} use --drafts to include draft pages", "tip:".dimmed());
     }
@@ -1148,7 +1158,12 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
             // ensures config changes are picked up regardless of how the
             // watcher classifies the event.
             match load_config_with_validation(&rebuild_config_path, true) {
-                Ok(new_config) => rebuild_config = new_config,
+                Ok(mut new_config) => {
+                    // Override base_url for local development
+                    new_config.base_url = dev_base_url.clone();
+                    new_config.resolve_base_path();
+                    rebuild_config = new_config;
+                }
                 Err(e) => {
                     eprintln!("  {} {e}", "Config error:".red().bold());
                     continue;
