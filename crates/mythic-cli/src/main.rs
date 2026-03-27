@@ -1125,6 +1125,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     // Override base_url for local development so links and assets resolve correctly
     let dev_base_url = format!("http://localhost:{port}");
     site_config.base_url = dev_base_url.clone();
+    site_config.base_path = None; // Clear so resolve_base_path re-derives from new base_url
     site_config.resolve_base_path();
 
     println!("{}", "Building site...".dimmed());
@@ -1161,6 +1162,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
                 Ok(mut new_config) => {
                     // Override base_url for local development
                     new_config.base_url = dev_base_url.clone();
+                    new_config.base_path = None;
                     new_config.resolve_base_path();
                     rebuild_config = new_config;
                 }
