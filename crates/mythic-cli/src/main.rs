@@ -1043,7 +1043,7 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
 
 // Starters embedded in the binary via include_dir
 use include_dir::{include_dir, Dir};
-static STARTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../starters");
+static STARTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/starters");
 
 fn init_project(name: &str, template: &str) -> Result<()> {
     let root = PathBuf::from(name);
