@@ -257,8 +257,14 @@ impl TemplateEngine {
         let mut page_ctx = serde_json::to_value(&page.frontmatter)
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
         if let serde_json::Value::Object(ref mut map) = page_ctx {
-            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
-            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+            map.insert(
+                "slug".to_string(),
+                serde_json::Value::String(page.slug.clone()),
+            );
+            map.insert(
+                "url".to_string(),
+                serde_json::Value::String(format!("/{}/", page.slug)),
+            );
         }
         ctx.insert("page", &page_ctx);
         ctx.insert("content", page.rendered_html.as_deref().unwrap_or(""));
@@ -285,8 +291,14 @@ impl TemplateEngine {
         let mut data = serde_json::Map::new();
         let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
         if let serde_json::Value::Object(ref mut map) = page_ctx {
-            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
-            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+            map.insert(
+                "slug".to_string(),
+                serde_json::Value::String(page.slug.clone()),
+            );
+            map.insert(
+                "url".to_string(),
+                serde_json::Value::String(format!("/{}/", page.slug)),
+            );
         }
         data.insert("page".to_string(), page_ctx);
         data.insert(
@@ -341,8 +353,14 @@ impl TemplateEngine {
         let mut data = serde_json::Map::new();
         let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
         if let serde_json::Value::Object(ref mut map) = page_ctx {
-            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
-            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+            map.insert(
+                "slug".to_string(),
+                serde_json::Value::String(page.slug.clone()),
+            );
+            map.insert(
+                "url".to_string(),
+                serde_json::Value::String(format!("/{}/", page.slug)),
+            );
         }
         data.insert("page".to_string(), page_ctx);
         data.insert(

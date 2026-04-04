@@ -984,8 +984,8 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     let rebuild_config_path = config_path.to_path_buf();
     let rebuild_root = root.clone();
     std::thread::spawn(move || {
-        let mut current_config = mythic_core::config::load_config(&rebuild_config_path)
-            .expect("Failed to load config");
+        let mut current_config =
+            mythic_core::config::load_config(&rebuild_config_path).expect("Failed to load config");
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
