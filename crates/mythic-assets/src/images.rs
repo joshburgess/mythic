@@ -28,7 +28,9 @@ pub struct ImageManifest {
 }
 
 /// Process all images: generate resized WebP variants with content-hashed filenames.
-pub fn process_images(config: &SiteConfig, root: &Path) -> Result<ImageManifest> {
+///
+/// Returns the image manifest and a list of warnings for images that failed to process.
+pub fn process_images(config: &SiteConfig, root: &Path) -> Result<(ImageManifest, Vec<String>)> {
     let static_dir = root.join(&config.static_dir);
     let output_base = root.join(&config.output_dir).join("assets/img");
     let breakpoints = config
@@ -38,37 +40,40 @@ pub fn process_images(config: &SiteConfig, root: &Path) -> Result<ImageManifest>
 
     let image_files = discover_images(&static_dir);
     if image_files.is_empty() {
-        return Ok(ImageManifest::default());
+        return Ok((ImageManifest::default(), Vec::new()));
     }
 
     std::fs::create_dir_all(&output_base).context("Failed to create image output directory")?;
 
-    let results: Vec<(String, Vec<GeneratedImage>)> = image_files
+    let results: Vec<Result<(String, Vec<GeneratedImage>), String>> = image_files
         .par_iter()
-        .filter_map(|path| {
-            match process_single_image(path, &static_dir, &output_base, breakpoints) {
+        .map(
+            |path| match process_single_image(path, &static_dir, &output_base, breakpoints) {
                 Ok(variants) => {
                     let rel = path
                         .strip_prefix(&static_dir)
                         .unwrap_or(path)
                         .to_string_lossy()
                         .to_string();
-                    Some((rel, variants))
+                    Ok((rel, variants))
                 }
-                Err(e) => {
-                    eprintln!("  Warning: failed to process {}: {e}", path.display());
-                    None
-                }
-            }
-        })
+                Err(e) => Err(format!("failed to process {}: {e}", path.display())),
+            },
+        )
         .collect();
 
     let mut manifest = ImageManifest::default();
-    for (key, variants) in results {
-        manifest.images.insert(key, variants);
+    let mut warnings = Vec::new();
+    for result in results {
+        match result {
+            Ok((key, variants)) => {
+                manifest.images.insert(key, variants);
+            }
+            Err(warning) => warnings.push(warning),
+        }
     }
 
-    Ok(manifest)
+    Ok((manifest, warnings))
 }
 
 fn discover_images(dir: &Path) -> Vec<PathBuf> {
@@ -219,7 +224,7 @@ mod tests {
         create_test_png(&static_dir, "test.png", 1600, 1200);
 
         let config = SiteConfig::for_testing("Test", "http://localhost");
-        let manifest = process_images(&config, dir.path()).unwrap();
+        let (manifest, _) = process_images(&config, dir.path()).unwrap();
         let variants = manifest.images.get("test.png").unwrap();
 
         // Should have: original PNG + WebP at 400, 800, 1200 + full WebP
@@ -240,7 +245,7 @@ mod tests {
         img.save(static_dir.join("photo.jpg")).unwrap();
 
         let config = SiteConfig::for_testing("Test", "http://localhost");
-        let manifest = process_images(&config, dir.path()).unwrap();
+        let (manifest, _) = process_images(&config, dir.path()).unwrap();
         let variants = manifest.images.get("photo.jpg").unwrap();
 
         assert!(variants.iter().any(|v| v.format == "webp"));
@@ -258,7 +263,7 @@ mod tests {
         process_images(&config, dir.path()).unwrap();
 
         // Second run should reuse existing files (they exist check)
-        let manifest = process_images(&config, dir.path()).unwrap();
+        let (manifest, _) = process_images(&config, dir.path()).unwrap();
         assert!(!manifest.images.is_empty());
     }
 

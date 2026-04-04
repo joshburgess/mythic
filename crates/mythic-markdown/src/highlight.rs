@@ -58,11 +58,13 @@ impl Highlighter {
     /// Generate a CSS stylesheet for the configured theme.
     pub fn generate_css(&self) -> String {
         let ts = ThemeSet::load_defaults();
-        let theme = ts
+        let Some(theme) = ts
             .themes
             .get(&self.theme_name)
             .or_else(|| ts.themes.get("base16-ocean.dark"))
-            .expect("No theme found");
+        else {
+            return String::new();
+        };
 
         syntect::html::css_for_theme_with_class_style(theme, ClassStyle::Spaced).unwrap_or_default()
     }

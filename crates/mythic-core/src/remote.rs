@@ -27,16 +27,21 @@ fn default_ttl() -> u64 {
 
 /// Fetch all remote data sources, using cached versions when available.
 ///
-/// Returns a JSON map of `name → value` for each source.
-pub fn fetch_remote_data(sources: &[RemoteSource], cache_dir: &Path) -> Result<Value> {
+/// Returns a JSON map of `name → value` for each source, plus any warnings
+/// for sources that failed to fetch.
+pub fn fetch_remote_data(
+    sources: &[RemoteSource],
+    cache_dir: &Path,
+) -> Result<(Value, Vec<String>)> {
     if sources.is_empty() {
-        return Ok(Value::Object(serde_json::Map::new()));
+        return Ok((Value::Object(serde_json::Map::new()), Vec::new()));
     }
 
     let remote_cache = cache_dir.join("remote");
     std::fs::create_dir_all(&remote_cache)?;
 
     let mut result = serde_json::Map::new();
+    let mut warnings = Vec::new();
 
     for source in sources {
         let cache_file = remote_cache.join(format!("{}.json", source.name));
@@ -58,10 +63,10 @@ pub fn fetch_remote_data(sources: &[RemoteSource], cache_dir: &Path) -> Result<V
                 result.insert(source.name.clone(), data);
             }
             Err(e) => {
-                eprintln!(
-                    "  Warning: failed to fetch remote data '{}' from {}: {e}",
+                warnings.push(format!(
+                    "failed to fetch remote data '{}' from {}: {e}",
                     source.name, source.url
-                );
+                ));
                 // Try stale cache as fallback
                 if cache_file.exists() {
                     if let Ok(content) = std::fs::read_to_string(&cache_file) {
@@ -76,7 +81,7 @@ pub fn fetch_remote_data(sources: &[RemoteSource], cache_dir: &Path) -> Result<V
         }
     }
 
-    Ok(Value::Object(result))
+    Ok((Value::Object(result), warnings))
 }
 
 fn read_cache(path: &Path, ttl: Duration) -> Option<Value> {
@@ -133,8 +138,9 @@ mod tests {
     #[test]
     fn empty_sources_returns_empty_object() {
         let dir = tempfile::tempdir().unwrap();
-        let result = fetch_remote_data(&[], dir.path()).unwrap();
+        let (result, warnings) = fetch_remote_data(&[], dir.path()).unwrap();
         assert_eq!(result, Value::Object(serde_json::Map::new()));
+        assert!(warnings.is_empty());
     }
 
     #[test]

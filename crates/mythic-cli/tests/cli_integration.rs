@@ -615,10 +615,10 @@ fn content_collections_available_in_templates() {
     )
     .unwrap();
 
-    // Template that renders content collections
+    // Template that renders content collections via lazy function
     std::fs::write(
         site.join("templates/default.html"),
-        "PAGES:{{ data.pages | length }}",
+        "PAGES:{{ get_pages() | length }}",
     )
     .unwrap();
 
@@ -653,10 +653,10 @@ fn content_collections_available_in_templates() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // The index page should show the page count from data.pages
+    // The index page should show the page count from get_pages()
     let html = std::fs::read_to_string(site.join("public/index/index.html")).unwrap();
     assert!(
         html.contains("PAGES:3"),
-        "Expected data.pages to have 3 entries, got: {html}"
+        "Expected get_pages() to have 3 entries, got: {html}"
     );
 }

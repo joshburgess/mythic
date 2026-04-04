@@ -19,9 +19,11 @@ use crate::page::Page;
 ///
 /// Scans `page.extra` for string values starting with `rhai:`,
 /// evaluates the expression with page context, and replaces the
-/// value with the result.
-pub fn evaluate_computed_fields(pages: &mut [Page]) {
+/// value with the result. Returns a list of warnings for expressions
+/// that failed to evaluate.
+pub fn evaluate_computed_fields(pages: &mut [Page]) -> Vec<String> {
     let engine = rhai::Engine::new();
+    let mut warnings = Vec::new();
 
     for page in pages.iter_mut() {
         let extra = match page.frontmatter.extra.as_mut() {
@@ -61,14 +63,16 @@ pub fn evaluate_computed_fields(pages: &mut [Page]) {
                     extra.insert(key, value);
                 }
                 Err(e) => {
-                    eprintln!(
-                        "  Warning: computed field '{}' in '{}' failed: {e}",
+                    warnings.push(format!(
+                        "computed field '{}' in '{}' failed: {e}",
                         key, page.slug
-                    );
+                    ));
                 }
             }
         }
     }
+
+    warnings
 }
 
 fn dynamic_to_json(val: &rhai::Dynamic) -> serde_json::Value {

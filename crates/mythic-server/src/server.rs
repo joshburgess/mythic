@@ -230,7 +230,7 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
         Ok(c) => c,
         Err(e) => {
             let msg = format!("500: failed to read {}: {}", file_path.display(), e);
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response()
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response();
         }
     };
 

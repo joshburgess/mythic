@@ -17,6 +17,7 @@
 
 use anyhow::Result;
 use rayon::prelude::*;
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::path::Path;
 use std::time::Instant;
 
@@ -45,13 +46,13 @@ pub struct BuildProfile {
     pub output_ms: u128,
 }
 
-impl BuildProfile {
-    pub fn print(&self) {
-        println!("\n  Pipeline profile:");
-        println!("    Discovery:  {:>6}ms", self.discovery_ms);
-        println!("    Render:     {:>6}ms", self.render_ms);
-        println!("    Templates:  {:>6}ms", self.template_ms);
-        println!("    Output:     {:>6}ms", self.output_ms);
+impl std::fmt::Display for BuildProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\n  Pipeline profile:")?;
+        writeln!(f, "    Discovery:  {:>6}ms", self.discovery_ms)?;
+        writeln!(f, "    Render:     {:>6}ms", self.render_ms)?;
+        writeln!(f, "    Templates:  {:>6}ms", self.template_ms)?;
+        writeln!(f, "    Output:     {:>6}ms", self.output_ms)
     }
 }
 
@@ -108,29 +109,65 @@ where
     let output_dir = root.join(&config.output_dir);
     let mut cache = DepGraph::load(&output_dir);
 
-    // Render markdown
+    // Hash config + templates so changes to either invalidate all pages.
+    // This is cheap (small files) and ensures config/template edits trigger rebuilds.
+    let env_hash = {
+        let state = ahash::RandomState::with_seeds(91, 82, 73, 64);
+        let mut hasher = state.build_hasher();
+        if let Ok(cfg_bytes) = std::fs::read(root.join("mythic.toml")) {
+            cfg_bytes.hash(&mut hasher);
+        }
+        let tmpl_dir = root.join(&config.template_dir);
+        if tmpl_dir.exists() {
+            for entry in walkdir::WalkDir::new(&tmpl_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+            {
+                if let Ok(bytes) = std::fs::read(entry.path()) {
+                    bytes.hash(&mut hasher);
+                }
+            }
+        }
+        hasher.finish()
+    };
+    cache.set_config_hash(env_hash);
+
+    // Partition pages: only render/template pages whose content has changed.
+    // This avoids O(n) render + O(n²) template work on incremental rebuilds.
+    let mut changed_pages: Vec<Page> = Vec::new();
+    let mut unchanged_pages: Vec<Page> = Vec::new();
+    for page in pages {
+        if cache.is_changed(&page.slug, page.content_hash) {
+            changed_pages.push(page);
+        } else {
+            unchanged_pages.push(page);
+        }
+    }
+    let pages_unchanged = unchanged_pages.len();
+
+    // Render markdown (only changed pages)
     let t1 = Instant::now();
-    render_fn(&mut pages);
+    render_fn(&mut changed_pages);
     let render_ms = t1.elapsed().as_millis();
 
-    // Apply templates in parallel if provided
+    // Apply templates in parallel (only changed pages)
     let t2 = Instant::now();
     if let Some(ref tmpl_fn) = template_fn {
-        let results: Vec<Result<String>> =
-            pages.par_iter().map(|page| tmpl_fn(page, config)).collect();
+        let results: Vec<Result<String>> = changed_pages
+            .par_iter()
+            .map(|page| tmpl_fn(page, config))
+            .collect();
 
-        for (page, result) in pages.iter_mut().zip(results) {
+        for (page, result) in changed_pages.iter_mut().zip(results) {
             page.rendered_html = Some(result?);
         }
     }
     let template_ms = t2.elapsed().as_millis();
 
-    // Write output files (incremental, parallelized)
+    // Write output files (only changed pages, parallelized)
     let t3 = Instant::now();
 
-    // Pre-compute output paths and separate changed from unchanged.
-    // Each entry holds (page_ref, dir_path, file_path) to avoid
-    // redundant PathBuf joins later.
     struct WriteJob<'a> {
         page: &'a Page,
         dir: std::path::PathBuf,
@@ -138,16 +175,13 @@ where
     }
 
     let mut to_write: Vec<WriteJob> = Vec::new();
-    let mut pages_unchanged = 0;
     let ugly_urls = config.ugly_urls;
 
-    for page in &pages {
+    for page in &changed_pages {
         if page.rendered_html.is_none() {
             continue;
         }
-        if !cache.is_changed(&page.slug, page.content_hash) {
-            pages_unchanged += 1;
-        } else if ugly_urls {
+        if ugly_urls {
             // Flat output: slug "blog/post" → output_dir/blog/post.html
             // No per-page directory creation needed.
             let file = output_dir.join(format!("{}.html", page.slug));
@@ -190,8 +224,11 @@ where
         // Use create_dir (not create_dir_all) — parent is guaranteed to exist
         // from a previous iteration or from the output_dir root.
         for dir in &all_dirs {
-            // create_dir returns Err if already exists, which is fine
-            let _ = std::fs::create_dir(dir);
+            if let Err(e) = std::fs::create_dir(dir) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(e.into());
+                }
+            }
         }
     }
 
@@ -245,8 +282,9 @@ where
         profile: build_profile,
     };
 
-    // Note: callers are responsible for printing the build summary.
-    // The BuildReport and BuildProfile contain all the data needed.
+    // Recombine changed and unchanged pages for callers (taxonomy, feeds, etc.)
+    let mut pages = changed_pages;
+    pages.extend(unchanged_pages);
 
     Ok((report, pages))
 }

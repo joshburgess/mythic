@@ -181,7 +181,12 @@ fn transform_admonitions(html: &str) -> String {
 
             // Remove the marker from the inner content.
             // Find where the marker is and strip it.
-            let marker_pos = inner.find(&marker).unwrap();
+            let Some(marker_pos) = inner.find(&marker) else {
+                // Marker confirmed above but not found in raw inner — keep original blockquote.
+                result.push_str(&after_open[..close_pos + "</blockquote>".len()]);
+                remaining = after_close;
+                continue;
+            };
             let before_marker = &inner[..marker_pos];
             let after_marker = &inner[marker_pos + marker.len()..];
 

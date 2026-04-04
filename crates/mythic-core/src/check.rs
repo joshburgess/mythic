@@ -24,29 +24,33 @@ impl CheckReport {
     pub fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
+}
 
-    pub fn print_summary(&self) {
-        println!("\nCheck results:");
-        println!("  Pages checked: {}", self.pages_checked);
-        println!("  Links checked: {}", self.links_checked);
+impl std::fmt::Display for CheckReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\nCheck results:")?;
+        writeln!(f, "  Pages checked: {}", self.pages_checked)?;
+        writeln!(f, "  Links checked: {}", self.links_checked)?;
 
         if !self.errors.is_empty() {
-            println!("\n  Errors ({}):", self.errors.len());
+            writeln!(f, "\n  Errors ({}):", self.errors.len())?;
             for e in &self.errors {
-                println!("    {} — {}", e.file, e.message);
+                writeln!(f, "    {} — {}", e.file, e.message)?;
             }
         }
 
         if !self.warnings.is_empty() {
-            println!("\n  Warnings ({}):", self.warnings.len());
+            writeln!(f, "\n  Warnings ({}):", self.warnings.len())?;
             for w in &self.warnings {
-                println!("    {} — {}", w.file, w.message);
+                writeln!(f, "    {} — {}", w.file, w.message)?;
             }
         }
 
         if self.errors.is_empty() && self.warnings.is_empty() {
-            println!("  No issues found.");
+            writeln!(f, "  No issues found.")?;
         }
+
+        Ok(())
     }
 }
 

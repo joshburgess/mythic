@@ -530,16 +530,23 @@ fn full_build(
 
     // Fetch remote data sources
     if !site_config.remote.is_empty() {
-        let remote_data = mythic_core::remote::fetch_remote_data(&site_config.remote, &data_dir)?;
+        let (remote_data, remote_warnings) =
+            mythic_core::remote::fetch_remote_data(&site_config.remote, &data_dir)?;
+        for w in &remote_warnings {
+            eprintln!("  {} {w}", "warning:".yellow().bold());
+        }
         if let serde_json::Value::Object(ref mut map) = site_data {
             map.insert("remote".to_string(), remote_data);
         }
     }
 
-    // Pre-build content discovery for collections (available in templates)
-    {
+    // Pre-build content discovery for collections.
+    // Collections are registered as lazy Tera functions (get_pages, get_sections)
+    // instead of being included in the per-page template context. This avoids
+    // deep-cloning the entire page list for every page render (O(n²) → O(1) for
+    // templates that don't use collections, which is the common case).
+    let collections_data = {
         let pre_pages = mythic_core::content::discover_content(site_config, root)?;
-        let mut collections = serde_json::Map::new();
 
         let all_pages_json: Vec<serde_json::Value> = pre_pages
             .iter()
@@ -554,10 +561,6 @@ fn full_build(
                 })
             })
             .collect();
-        collections.insert(
-            "pages".to_string(),
-            serde_json::Value::Array(all_pages_json),
-        );
 
         let mut sections: std::collections::HashMap<String, Vec<serde_json::Value>> =
             std::collections::HashMap::new();
@@ -578,17 +581,18 @@ fn full_build(
                     }));
             }
         }
+
+        let mut collections = serde_json::Map::new();
+        collections.insert(
+            "pages".to_string(),
+            serde_json::Value::Array(all_pages_json),
+        );
         collections.insert(
             "sections".to_string(),
             serde_json::to_value(&sections).unwrap_or_default(),
         );
-
-        if let serde_json::Value::Object(ref mut map) = site_data {
-            for (k, v) in collections {
-                map.insert(k, v);
-            }
-        }
-    }
+        serde_json::Value::Object(collections)
+    };
 
     let mut plugin_manager = mythic_core::plugin::PluginManager::new();
     plugin_manager.register(Box::new(mythic_core::plugin::ReadingTimePlugin::new()));
@@ -609,7 +613,19 @@ fn full_build(
         .as_ref()
         .map(|t| t.default_engine.as_str())
         .unwrap_or("tera");
-    let engine = mythic_template::TemplateEngine::new_with_default(&template_dir, default_engine)?;
+    let mut engine =
+        mythic_template::TemplateEngine::new_with_default(&template_dir, default_engine)?;
+
+    // Register collections as lazy Tera functions — only materialized when called.
+    // This eliminates the O(n²) clone overhead for templates that don't use collections.
+    if let serde_json::Value::Object(ref coll) = collections_data {
+        if let Some(pages_val) = coll.get("pages") {
+            engine.register_lazy_value("get_pages", pages_val.clone());
+        }
+        if let Some(sections_val) = coll.get("sections") {
+            engine.register_lazy_value("get_sections", sections_val.clone());
+        }
+    }
 
     let render_config = mythic_markdown::render::RenderConfig {
         highlight_theme: site_config
@@ -629,7 +645,10 @@ fn full_build(
     let shortcode_dir = root.join("shortcodes");
     let has_shortcodes = shortcode_dir.exists();
 
-    let assets_manifest = mythic_assets::process_assets(site_config, root)?;
+    let (assets_manifest, asset_warnings) = mythic_assets::process_assets(site_config, root)?;
+    for w in &asset_warnings {
+        eprintln!("  {} {w}", "warning:".yellow().bold());
+    }
     let mut template_extra = serde_json::Map::new();
     template_extra.insert(
         "css_path".to_string(),
@@ -651,6 +670,11 @@ fn full_build(
         std::fs::write(output_dir.join("syntax.css"), &highlight_css)?;
     }
 
+    // Pre-build the shared template context once (avoids re-serializing large
+    // collections data for every page render — critical for O(n) vs O(n²) scaling).
+    let base_ctx =
+        engine.build_base_tera_context(site_config, Some(&assets_value), Some(&site_data));
+
     // --- Core build ---
 
     let (report, built_pages) = mythic_core::build::build_with_profile(
@@ -671,7 +695,10 @@ fn full_build(
             mythic_core::summary::extract_summaries(pages);
 
             // Evaluate computed frontmatter fields (rhai: expressions)
-            mythic_core::computed::evaluate_computed_fields(pages);
+            let computed_warnings = mythic_core::computed::evaluate_computed_fields(pages);
+            for w in &computed_warnings {
+                eprintln!("  {} {w}", "warning:".yellow().bold());
+            }
 
             for page in pages.iter_mut() {
                 if let Err(e) = plugin_manager.run_pre_render(page) {
@@ -702,8 +729,8 @@ fn full_build(
             }
         },
         Some(
-            |page: &mythic_core::page::Page, cfg: &mythic_core::config::SiteConfig| {
-                match engine.render_full(page, cfg, Some(&assets_value), Some(&site_data)) {
+            |page: &mythic_core::page::Page, _cfg: &mythic_core::config::SiteConfig| {
+                match engine.render_with_base_context(page, &base_ctx) {
                     Ok(html) => Ok(html),
                     Err(e) => {
                         // Log the error but skip the page instead of aborting the build
@@ -741,13 +768,52 @@ fn full_build(
     }
 
     // --- Post-build ---
+    let post_ctx = PostBuildContext {
+        site_config,
+        output_dir: &output_dir,
+        site_data: &site_data,
+        assets_value: &assets_value,
+        engine: &engine,
+    };
+    post_build(&post_ctx, &built_pages, &mut plugin_manager, &report, quiet)?;
 
-    let non_draft_pages = built_pages;
+    if profile && !quiet {
+        println!(
+            "  {} {}",
+            "Full pipeline:".dimmed(),
+            format!("{}ms", full_start.elapsed().as_millis()).yellow(),
+        );
+    }
 
+    Ok(())
+}
+
+struct PostBuildContext<'a> {
+    site_config: &'a mythic_core::config::SiteConfig,
+    output_dir: &'a Path,
+    site_data: &'a serde_json::Value,
+    assets_value: &'a serde_json::Value,
+    engine: &'a mythic_template::TemplateEngine,
+}
+
+fn post_build(
+    ctx: &PostBuildContext<'_>,
+    pages: &[mythic_core::page::Page],
+    plugin_manager: &mut mythic_core::plugin::PluginManager,
+    report: &mythic_core::build::BuildReport,
+    quiet: bool,
+) -> Result<()> {
+    let PostBuildContext {
+        site_config,
+        output_dir,
+        site_data,
+        assets_value,
+        engine,
+    } = ctx;
     // Detect duplicate slugs
     {
         let mut seen = std::collections::HashMap::new();
-        for page in &non_draft_pages {
+        for page in pages {
             if let Some(prev) = seen.insert(&page.slug, &page.source_path) {
                 eprintln!(
                     "  {} duplicate slug '{}': {} and {}",
@@ -769,25 +835,24 @@ fn full_build(
     }
 
     // Generate redirect pages from aliases
-    let redirect_count = mythic_core::redirects::generate_redirects(
-        &non_draft_pages,
-        &output_dir,
-        &site_config.base_url,
-    )?;
+    let redirect_count =
+        mythic_core::redirects::generate_redirects(pages, output_dir, &site_config.base_url)?;
     if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }
 
+    // Skip heavy post-build work when nothing changed (incremental no-op)
+    if report.pages_written == 0 {
+        plugin_manager.run_post_build(report)?;
+        return Ok(());
+    }
+
     // Generate search index
-    mythic_core::search::generate_search_index(
-        &non_draft_pages,
-        &output_dir,
-        &site_config.base_url,
-    )?;
+    mythic_core::search::generate_search_index(pages, output_dir, &site_config.base_url)?;
 
     // Generate taxonomy pages with pagination
     if !site_config.taxonomies.is_empty() {
-        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, &non_draft_pages);
+        let taxonomies = mythic_core::taxonomy::build_taxonomies(site_config, pages);
 
         // Render taxonomy listing pages
         let taxonomy_pages = mythic_core::taxonomy::generate_taxonomy_pages(&taxonomies);
@@ -851,7 +916,7 @@ fn full_build(
                         if let Ok(html) = engine.render_full(
                             &paged,
                             site_config,
-                            Some(&assets_value),
+                            Some(assets_value),
                             Some(&extra_value),
                         ) {
                             let dest = output_dir.join(&slug).join("index.html");
@@ -867,7 +932,7 @@ fn full_build(
 
             // Non-paginated page (listing pages, or terms without pagination)
             if let Ok(html) =
-                engine.render_full(&page, site_config, Some(&assets_value), Some(&site_data))
+                engine.render_full(&page, site_config, Some(assets_value), Some(site_data))
             {
                 let dest = output_dir.join(&page.slug).join("index.html");
                 if let Some(parent) = dest.parent() {
@@ -877,29 +942,21 @@ fn full_build(
             }
         }
 
-        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &taxonomies, &output_dir)?;
+        mythic_core::feed::generate_feeds(site_config, pages, &taxonomies, output_dir)?;
     } else if site_config.feed.is_some() {
-        mythic_core::feed::generate_feeds(site_config, &non_draft_pages, &[], &output_dir)?;
+        mythic_core::feed::generate_feeds(site_config, pages, &[], output_dir)?;
     }
 
     // Generate sitemap and robots.txt
-    mythic_core::sitemap::generate(site_config, &non_draft_pages, &output_dir)?;
+    mythic_core::sitemap::generate(site_config, pages, output_dir)?;
 
-    plugin_manager.run_post_build(&report)?;
+    plugin_manager.run_post_build(report)?;
 
     // Compute content diff for minimal deployments
-    let diff = mythic_core::diff::compute_diff(&output_dir)?;
+    let diff = mythic_core::diff::compute_diff(output_dir)?;
     if !quiet && diff.total_changes() > 0 {
-        diff.print_summary();
-        mythic_core::diff::write_deploy_manifest(&output_dir, &diff)?;
-    }
-
-    if profile && !quiet {
-        println!(
-            "  {} {}",
-            "Full pipeline:".dimmed(),
-            format!("{}ms", full_start.elapsed().as_millis()).yellow(),
-        );
+        print!("{diff}");
+        mythic_core::diff::write_deploy_manifest(output_dir, &diff)?;
     }
 
     Ok(())
@@ -924,13 +981,26 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     let watcher = mythic_server::watcher::FileWatcher::new(&site_config, &root)?;
 
     let rebuild_tx = reload_tx.clone();
-    let rebuild_config = site_config.clone();
+    let rebuild_config_path = config_path.to_path_buf();
     let rebuild_root = root.clone();
     std::thread::spawn(move || {
+        let mut current_config = mythic_core::config::load_config(&rebuild_config_path)
+            .expect("Failed to load config");
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
-            match full_build(&rebuild_config, &rebuild_root, drafts, false, true, false) {
+            // Re-read config on config changes so template context stays current
+            if matches!(event, mythic_server::watcher::WatchEvent::ConfigChanged) {
+                match mythic_core::config::load_config(&rebuild_config_path) {
+                    Ok(cfg) => current_config = cfg,
+                    Err(e) => {
+                        eprintln!("  {} {e}", "Config error:".red().bold());
+                        continue;
+                    }
+                }
+            }
+
+            match full_build(&current_config, &rebuild_root, drafts, false, true, false) {
                 Ok(_) => {
                     use mythic_server::server::{notify_reload, ReloadMessage};
                     use mythic_server::watcher::WatchEvent;

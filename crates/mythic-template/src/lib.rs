@@ -8,6 +8,7 @@ use mythic_core::config::SiteConfig;
 use mythic_core::page::Page;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use walkdir::WalkDir;
 
 /// Multi-engine template renderer.
@@ -117,6 +118,20 @@ impl TemplateEngine {
         })
     }
 
+    /// Register a lazy Tera function that returns a cached value on demand.
+    /// Used for large data like collections (pages, sections) that should only
+    /// be materialized when a template actually accesses them, avoiding O(n²)
+    /// cloning overhead in per-page rendering.
+    pub fn register_lazy_value(&mut self, name: &str, value: serde_json::Value) {
+        let cached = Arc::new(tera::to_value(&value).unwrap_or(tera::Value::Null));
+        self.tera.register_function(
+            name,
+            move |_args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
+                Ok((*cached).clone())
+            },
+        );
+    }
+
     /// Render a page using its specified layout template.
     pub fn render(&self, page: &Page, config: &SiteConfig) -> Result<String> {
         self.render_with_assets(page, config, None)
@@ -154,30 +169,25 @@ impl TemplateEngine {
         }
     }
 
-    fn render_tera(
+    /// Build a shared base Tera context containing site config, assets, and data.
+    /// This avoids re-serializing large data (like collections) for every page render.
+    /// Clone the returned context and add page-specific fields for each render.
+    pub fn build_base_tera_context(
         &self,
-        page: &Page,
         config: &SiteConfig,
-        layout: &str,
         assets: Option<&serde_json::Value>,
         data: Option<&serde_json::Value>,
-    ) -> Result<String> {
-        let template_name = if self.tera.get_template(&format!("{layout}.html")).is_ok() {
-            format!("{layout}.html")
-        } else if self.tera.get_template(&format!("{layout}.tera")).is_ok() {
-            format!("{layout}.tera")
-        } else {
-            format!("{layout}.html")
-        };
-
+    ) -> tera::Context {
         let mut ctx = tera::Context::new();
-        ctx.insert("page", &page.frontmatter);
-        ctx.insert("content", page.rendered_html.as_deref().unwrap_or(""));
-        ctx.insert("toc", &page.toc);
+
+        // Extract the path component from base_url for subpath deployments
+        // e.g. "https://user.github.io/blog" → "/blog"
+        let base_path = extract_base_path(&config.base_url);
 
         let mut site = HashMap::new();
         site.insert("title", config.title.as_str());
         site.insert("base_url", config.base_url.as_str());
+        site.insert("base_path", base_path.as_str());
         ctx.insert("site", &site);
 
         if let Some(assets) = assets {
@@ -187,6 +197,72 @@ impl TemplateEngine {
         if let Some(data) = data {
             ctx.insert("data", data);
         }
+
+        ctx
+    }
+
+    /// Render a page using a pre-built shared context (avoids re-serializing shared data).
+    pub fn render_with_base_context(
+        &self,
+        page: &Page,
+        base_ctx: &tera::Context,
+    ) -> Result<String> {
+        let layout = page.frontmatter.layout.as_deref().unwrap_or("default");
+
+        let engine = self
+            .layout_engines
+            .get(layout)
+            .map(|s| s.as_str())
+            .unwrap_or(&self.default_engine);
+
+        match engine {
+            "hbs" | "handlebars" => {
+                // Handlebars doesn't use tera::Context — fall back to full render
+                // (Handlebars sites are rare; this is not the hot path)
+                self.render_hbs_from_base(page, base_ctx, layout)
+            }
+            _ => self.render_tera_from_base(page, base_ctx, layout),
+        }
+    }
+
+    fn render_tera(
+        &self,
+        page: &Page,
+        config: &SiteConfig,
+        layout: &str,
+        assets: Option<&serde_json::Value>,
+        data: Option<&serde_json::Value>,
+    ) -> Result<String> {
+        let base = self.build_base_tera_context(config, assets, data);
+        self.render_tera_from_base(page, &base, layout)
+    }
+
+    fn render_tera_from_base(
+        &self,
+        page: &Page,
+        base_ctx: &tera::Context,
+        layout: &str,
+    ) -> Result<String> {
+        let template_name = if self.tera.get_template(&format!("{layout}.html")).is_ok() {
+            format!("{layout}.html")
+        } else if self.tera.get_template(&format!("{layout}.tera")).is_ok() {
+            format!("{layout}.tera")
+        } else {
+            format!("{layout}.html")
+        };
+
+        let mut ctx = base_ctx.clone();
+
+        // Build page context: frontmatter fields plus computed url/slug
+        let mut page_ctx = serde_json::to_value(&page.frontmatter)
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        if let serde_json::Value::Object(ref mut map) = page_ctx {
+            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
+            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+        }
+        ctx.insert("page", &page_ctx);
+        ctx.insert("content", page.rendered_html.as_deref().unwrap_or(""));
+        ctx.insert("toc", &page.toc);
 
         self.tera.render(&template_name, &ctx).with_context(|| {
             format!(
@@ -207,12 +283,19 @@ impl TemplateEngine {
         let template_name = format!("{layout}.hbs");
 
         let mut data = serde_json::Map::new();
-        data.insert("page".to_string(), serde_json::to_value(&page.frontmatter)?);
+        let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
+        if let serde_json::Value::Object(ref mut map) = page_ctx {
+            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
+            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+        }
+        data.insert("page".to_string(), page_ctx);
         data.insert(
             "content".to_string(),
             serde_json::Value::String(page.rendered_html.as_deref().unwrap_or("").to_string()),
         );
         data.insert("toc".to_string(), serde_json::to_value(&page.toc)?);
+
+        let base_path = extract_base_path(&config.base_url);
 
         let mut site = serde_json::Map::new();
         site.insert(
@@ -222,6 +305,10 @@ impl TemplateEngine {
         site.insert(
             "base_url".to_string(),
             serde_json::Value::String(config.base_url.clone()),
+        );
+        site.insert(
+            "base_path".to_string(),
+            serde_json::Value::String(base_path),
         );
         data.insert("site".to_string(), serde_json::Value::Object(site));
 
@@ -239,6 +326,52 @@ impl TemplateEngine {
                 page.slug
             )
         })
+    }
+
+    fn render_hbs_from_base(
+        &self,
+        page: &Page,
+        _base_ctx: &tera::Context,
+        layout: &str,
+    ) -> Result<String> {
+        // For Handlebars, we can't reuse tera::Context efficiently.
+        // This path is only hit for .hbs templates, which is uncommon.
+        let template_name = format!("{layout}.hbs");
+
+        let mut data = serde_json::Map::new();
+        let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
+        if let serde_json::Value::Object(ref mut map) = page_ctx {
+            map.insert("slug".to_string(), serde_json::Value::String(page.slug.clone()));
+            map.insert("url".to_string(), serde_json::Value::String(format!("/{}/", page.slug)));
+        }
+        data.insert("page".to_string(), page_ctx);
+        data.insert(
+            "content".to_string(),
+            serde_json::Value::String(page.rendered_html.as_deref().unwrap_or("").to_string()),
+        );
+        data.insert("toc".to_string(), serde_json::to_value(&page.toc)?);
+
+        self.hbs.render(&template_name, &data).with_context(|| {
+            format!(
+                "Failed to render Handlebars template '{template_name}' for '{}'",
+                page.slug
+            )
+        })
+    }
+}
+
+/// Extract the path component from a base URL for subpath deployments.
+/// e.g. "https://user.github.io/blog" → "/blog", "http://localhost:3000" → ""
+fn extract_base_path(base_url: &str) -> String {
+    // Strip scheme (http:// or https://)
+    let without_scheme = base_url
+        .strip_prefix("https://")
+        .or_else(|| base_url.strip_prefix("http://"))
+        .unwrap_or(base_url);
+    // Find the first slash after the host
+    match without_scheme.find('/') {
+        Some(pos) => without_scheme[pos..].trim_end_matches('/').to_string(),
+        None => String::new(),
     }
 }
 

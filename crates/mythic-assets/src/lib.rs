@@ -33,15 +33,17 @@ pub fn compute_sri(content: &str) -> String {
     format!("sha384-{b64}")
 }
 
-/// Run the full asset pipeline and return the manifest.
-pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest> {
+/// Run the full asset pipeline and return the manifest plus any warnings.
+pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<(AssetManifest, Vec<String>)> {
     let output_dir = root.join(&config.output_dir);
     let mut manifest = AssetManifest::default();
+    let mut warnings = Vec::new();
 
     // Process images
     let static_dir = root.join(&config.static_dir);
     if static_dir.exists() {
-        images::process_images(config, root)?;
+        let (_, image_warnings) = images::process_images(config, root)?;
+        warnings.extend(image_warnings);
     }
 
     // Compile Sass if configured
@@ -75,7 +77,7 @@ pub fn process_assets(config: &SiteConfig, root: &Path) -> Result<AssetManifest>
         }
     }
 
-    Ok(manifest)
+    Ok((manifest, warnings))
 }
 
 #[cfg(test)]

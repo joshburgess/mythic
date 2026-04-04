@@ -11,8 +11,14 @@ const CACHE_FILENAME: &str = ".mythic-cache.json";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepGraph {
     hashes: HashMap<String, u64>,
+    /// Hash of the config file — if this changes, all pages are invalidated.
+    #[serde(default)]
+    config_hash: u64,
     #[serde(skip)]
     path: PathBuf,
+    /// When true, all pages are treated as changed (config/template change).
+    #[serde(skip)]
+    force_rebuild: bool,
 }
 
 impl DepGraph {
@@ -29,12 +35,26 @@ impl DepGraph {
         }
         DepGraph {
             hashes: HashMap::new(),
+            config_hash: 0,
             path,
+            force_rebuild: false,
+        }
+    }
+
+    /// Set the current config hash. If it differs from the cached value,
+    /// all pages will be treated as changed.
+    pub fn set_config_hash(&mut self, hash: u64) {
+        if self.config_hash != hash {
+            self.force_rebuild = true;
+            self.config_hash = hash;
         }
     }
 
     /// Check if a page's content has changed since the last build.
     pub fn is_changed(&self, slug: &str, content_hash: u64) -> bool {
+        if self.force_rebuild {
+            return true;
+        }
         match self.hashes.get(slug) {
             Some(&cached_hash) => cached_hash != content_hash,
             None => true,

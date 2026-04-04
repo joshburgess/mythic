@@ -25,22 +25,25 @@ impl MigrationReport {
     pub fn error(&mut self, msg: impl Into<String>) {
         self.errors.push(msg.into());
     }
+}
 
-    pub fn print_summary(&self) {
-        println!("\nMigration complete:");
-        println!("  Files copied:    {}", self.files_copied);
-        println!("  Files converted: {}", self.files_converted);
+impl std::fmt::Display for MigrationReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\nMigration complete:")?;
+        writeln!(f, "  Files copied:    {}", self.files_copied)?;
+        writeln!(f, "  Files converted: {}", self.files_converted)?;
         if !self.warnings.is_empty() {
-            println!("\n  Warnings ({}):", self.warnings.len());
+            writeln!(f, "\n  Warnings ({}):", self.warnings.len())?;
             for w in &self.warnings {
-                println!("    - {w}");
+                writeln!(f, "    - {w}")?;
             }
         }
         if !self.errors.is_empty() {
-            println!("\n  Errors ({}):", self.errors.len());
+            writeln!(f, "\n  Errors ({}):", self.errors.len())?;
             for e in &self.errors {
-                println!("    - {e}");
+                writeln!(f, "    - {e}")?;
             }
         }
+        Ok(())
     }
 }

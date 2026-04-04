@@ -35,13 +35,15 @@ impl DiffResult {
     pub fn total_changes(&self) -> usize {
         self.added.len() + self.modified.len() + self.removed.len()
     }
+}
 
-    pub fn print_summary(&self) {
-        println!("\n  Content diff:");
-        println!("    Added:     {}", self.added.len());
-        println!("    Modified:  {}", self.modified.len());
-        println!("    Removed:   {}", self.removed.len());
-        println!("    Unchanged: {}", self.unchanged);
+impl std::fmt::Display for DiffResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "\n  Content diff:")?;
+        writeln!(f, "    Added:     {}", self.added.len())?;
+        writeln!(f, "    Modified:  {}", self.modified.len())?;
+        writeln!(f, "    Removed:   {}", self.removed.len())?;
+        writeln!(f, "    Unchanged: {}", self.unchanged)
     }
 }
 
