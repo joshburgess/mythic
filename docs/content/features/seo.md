@@ -106,11 +106,11 @@ Two template variables are available:
 
 ```html
 <link rel="stylesheet"
-      href="{{ assets.css }}"
+      href="{{ assets.css_path }}"
       integrity="{{ assets.css_integrity }}"
       crossorigin="anonymous">
 
-<script src="{{ assets.js }}"
+<script src="{{ assets.js_path }}"
         integrity="{{ assets.js_integrity }}"
         crossorigin="anonymous"
         defer></script>

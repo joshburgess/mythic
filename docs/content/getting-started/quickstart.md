@@ -140,7 +140,7 @@ Open `templates/base.tera.html` to customize the site layout:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page.title }} | My Site</title>
-    <link rel="stylesheet" href="{{ assets.css }}">
+    <link rel="stylesheet" href="{{ assets.css_path }}">
 </head>
 <body>
     <nav>

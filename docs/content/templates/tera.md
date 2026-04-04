@@ -100,9 +100,10 @@ Truthiness: empty strings, `0`, `false`, empty arrays, and `null` are falsy.
 
 ```html
 <ul>
-{% for post in site.pages %}
+{% set all_pages = get_pages() %}
+{% for post in all_pages %}
   <li>
-    <a href="{{ post.path }}">{{ post.title }}</a>
+    <a href="{{ post.url }}">{{ post.title }}</a>
   </li>
 {% endfor %}
 </ul>
@@ -122,7 +123,8 @@ Loop variables:
 Filtering and sorting in loops:
 
 ```html
-{% for post in site.pages | sort_by(attribute="date") | reverse %}
+{% set all_pages = get_pages() %}
+{% for post in all_pages | sort_by(attribute="date") | reverse %}
   {% if not post.draft %}
     <article>
       <h2>{{ post.title }}</h2>
@@ -135,7 +137,8 @@ Filtering and sorting in loops:
 Empty loop fallback:
 
 ```html
-{% for post in site.pages %}
+{% set all_pages = get_pages() %}
+{% for post in all_pages %}
   <li>{{ post.title }}</li>
 {% else %}
   <li>No posts found.</li>

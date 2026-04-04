@@ -109,7 +109,7 @@ Displays pages for a single term:
 
 {% for post in term.pages | sort_by(attribute="date") | reverse %}
 <article class="post-summary">
-    <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+    <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
     <time datetime="{{ post.date | date(format='%Y-%m-%d') }}">
         {{ post.date | date(format="%B %e, %Y") }}
     </time>
@@ -139,7 +139,7 @@ Build a tag cloud by checking term page counts:
 
 ```html
 <div class="tag-cloud">
-{% for term in site.taxonomies.tags %}
+{% for term in taxonomy.terms %}
     {% set size = term.pages | length %}
     <a href="/tags/{{ term.slug }}/"
        class="tag tag-size-{% if size > 10 %}lg{% elif size > 5 %}md{% else %}sm{% endif %}">
@@ -166,7 +166,7 @@ Use `data.paginator.pages` instead of `term.pages` when pagination is active, si
 ```html
 {% for post in data.paginator.pages %}
 <article>
-    <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+    <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
     <time>{{ post.date | date(format="%B %e, %Y") }}</time>
 </article>
 {% endfor %}

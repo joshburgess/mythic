@@ -125,9 +125,9 @@ template_engine = "tera"
 | Jekyll (Liquid)                        | Mythic (Tera)                                    |
 |----------------------------------------|--------------------------------------------------|
 | `{{ content }}`                        | `{{ content \| safe }}`                          |
-| `{{ page.url }}`                       | `{{ page.path }}`                                |
-| `{{ site.posts }}`                     | `{{ site.sections.blog }}`                       |
-| `{% for post in site.posts %}`         | `{% for post in site.sections.blog %}`           |
+| `{{ page.url }}`                       | `{{ page.url }}`                                 |
+| `{{ site.posts }}`                     | `{% set sections = get_sections() %}{{ sections.blog }}` |
+| `{% for post in site.posts %}`         | `{% set sections = get_sections() %}{% for post in sections.blog %}` |
 | `{% elsif %}`                          | `{% elif %}`                                     |
 | `{% assign x = 1 %}`                  | `{% set x = 1 %}`                               |
 | `{% include file.html %}`             | `{% include "partials/file.tera.html" %}`        |

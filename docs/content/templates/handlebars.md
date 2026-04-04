@@ -68,7 +68,7 @@ The inverse of `if`:
 
 ```html
 {{#unless page.draft}}
-  <a href="{{page.path}}">{{page.title}}</a>
+  <a href="{{page.url}}">{{page.title}}</a>
 {{/unless}}
 ```
 
@@ -87,12 +87,14 @@ Iterate over arrays:
 Inside an `each` block, special variables are available:
 
 ```html
-{{#each site.pages}}
+{{!-- Note: site.pages is not available in Handlebars templates.
+     Use Tera templates for collection iteration with get_pages(). --}}
+{{#each page.tags}}
   {{@index}}    <!-- 0-based index -->
   {{@first}}    <!-- true on first iteration -->
   {{@last}}     <!-- true on last iteration -->
   {{@key}}      <!-- key name when iterating objects -->
-  {{this.title}} <!-- current item -->
+  {{this}}      <!-- current item -->
 {{/each}}
 ```
 
@@ -107,10 +109,10 @@ Iterate over objects:
 Empty fallback:
 
 ```html
-{{#each site.pages}}
-  <li>{{this.title}}</li>
+{{#each page.tags}}
+  <li>{{this}}</li>
 {{else}}
-  <li>No pages found.</li>
+  <li>No tags found.</li>
 {{/each}}
 ```
 
@@ -150,7 +152,7 @@ Output debug information to the build console:
 
 ```html
 {{log page.title}}
-{{log "Current path:" page.path}}
+{{log "Current url:" page.url}}
 ```
 
 ## Built-in Helpers
@@ -268,7 +270,7 @@ Inside the partial:
 ```html
 <!-- templates/partials/post-card.hbs.html -->
 <article class="{{#if featured}}featured{{/if}}">
-    <h2><a href="{{post.path}}">{{post.title}}</a></h2>
+    <h2><a href="{{post.url}}">{{post.title}}</a></h2>
     <p>{{post.description}}</p>
 </article>
 ```
@@ -282,8 +284,10 @@ Define partials inline within a template:
   <aside>
     <h3>Recent Posts</h3>
     <ul>
-      {{#each site.pages}}
-        <li><a href="{{this.path}}">{{this.title}}</a></li>
+      {{!-- Note: site.pages is not available in Handlebars templates.
+           Use Tera templates for collection iteration with get_pages(). --}}
+      {{#each page.tags}}
+        <li>{{this}}</li>
       {{/each}}
     </ul>
   </aside>

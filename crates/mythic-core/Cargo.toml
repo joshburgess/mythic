@@ -3,7 +3,7 @@ name = "mythic-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description.workspace = true
+description = "Core config, content discovery, build pipeline, and caching for the Mythic static site generator"
 repository.workspace = true
 
 [dependencies]

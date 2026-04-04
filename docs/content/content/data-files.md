@@ -184,7 +184,7 @@ If multiple formats exist in the same directory, Mythic uses YAML first, then TO
 <nav>
   {% for item in data.nav.main %}
     <a href="{{ item.url }}"
-       {% if item.url == page.path %}class="active"{% endif %}>
+       {% if item.url == page.url %}class="active"{% endif %}>
       {{ item.label }}
     </a>
   {% endfor %}

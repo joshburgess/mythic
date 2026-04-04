@@ -16,8 +16,8 @@ The `page` object contains metadata about the current page being rendered.
 | `page.date`            | DateTime      | Publication date                                 |
 | `page.updated`         | DateTime      | Last updated date                                |
 | `page.draft`           | Boolean       | Whether the page is a draft                      |
-| `page.slug`            | String        | URL slug                                         |
-| `page.path`            | String        | Full URL path (e.g., `/blog/my-post/`)           |
+| `page.slug`            | String        | URL slug (e.g., `blog/my-post`)                  |
+| `page.url`             | String        | Full URL path (e.g., `/blog/my-post/`)           |
 | `page.layout`          | String        | Template name used for rendering                 |
 | `page.description`     | String        | Page description from frontmatter                |
 | `page.tags`            | Array         | List of tag strings                              |
@@ -123,83 +123,29 @@ The `site` object contains global site information and page collections.
 |-----------------------|----------|----------------------------------------------------|
 | `site.title`          | String   | Site title from `mythic.toml`                      |
 | `site.base_url`       | String   | Base URL (e.g., `https://example.com`)             |
-| `site.language`       | String   | Default language code                              |
-| `site.description`    | String   | Site description                                   |
-| `site.pages`          | Array    | All non-draft pages                                |
-| `site.sections`       | Object   | Pages grouped by content section                   |
-| `site.taxonomies`     | Object   | Taxonomy terms and their pages                     |
-| `site.build_time`     | DateTime | Timestamp of the current build                     |
-
-### site.pages
-
-An array of all non-draft pages in the site. Each element has the same fields as `page`:
-
-```html
-{% for post in site.pages | sort_by(attribute="date") | reverse %}
-    {% if post.dir == "blog" %}
-    <article>
-        <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
-        <time>{{ post.date | date(format="%Y-%m-%d") }}</time>
-        <p>{{ post.description }}</p>
-    </article>
-    {% endif %}
-{% endfor %}
-```
-
-### site.sections
-
-Pages grouped by their content directory:
-
-```html
-<!-- List all blog posts -->
-{% for post in site.sections.blog | sort_by(attribute="date") | reverse %}
-    <a href="{{ post.path }}">{{ post.title }}</a>
-{% endfor %}
-
-<!-- List documentation pages by weight -->
-{% for doc in site.sections.docs | sort_by(attribute="weight") %}
-    <a href="{{ doc.path }}">{{ doc.title }}</a>
-{% endfor %}
-```
-
-### site.taxonomies
-
-Access taxonomy terms and their associated pages:
-
-```html
-<!-- List all tags -->
-{% for tag in site.taxonomies.tags %}
-    <a href="/tags/{{ tag.slug }}/">
-        {{ tag.name }} ({{ tag.pages | length }})
-    </a>
-{% endfor %}
-
-<!-- In a taxonomy template, list pages for the current term -->
-{% for post in taxonomy_pages %}
-    <a href="{{ post.path }}">{{ post.title }}</a>
-{% endfor %}
-```
+| `site.base_path`      | String   | URL path prefix for subpath deploys (e.g., `/blog` from `https://user.github.io/blog`) |
 
 ## assets
 
 The `assets` object provides paths to processed asset files, including content hashes for cache busting.
 
-| Variable          | Type   | Description                                |
-|-------------------|--------|--------------------------------------------|
-| `assets.css`      | String | Path to the compiled CSS file              |
-| `assets.js`       | String | Path to the bundled JavaScript file        |
+| Variable                | Type   | Description                                |
+|-------------------------|--------|--------------------------------------------|
+| `assets.css_path`       | String | Path to the compiled CSS file (content-hashed) |
+| `assets.js_path`        | String | Path to the bundled JavaScript file (content-hashed) |
+| `assets.css_integrity`  | String | SHA-384 SRI hash for the CSS file          |
+| `assets.js_integrity`   | String | SHA-384 SRI hash for the JS file           |
 
 ```html
-<link rel="stylesheet" href="{{ assets.css }}">
-<script src="{{ assets.js }}" defer></script>
+{% if assets.css_path %}
+<link rel="stylesheet" href="{{ assets.css_path }}">
+{% endif %}
+{% if assets.js_path %}
+<script src="{{ assets.js_path }}" defer></script>
+{% endif %}
 ```
 
-In production, these paths include content hashes:
-
-```html
-<link rel="stylesheet" href="/css/main.a1b2c3d4.css">
-<script src="/js/main.e5f6a7b8.js" defer></script>
-```
+Paths include content hashes for cache busting (e.g., `/styles-a1b2c3d4e5f6.css`).
 
 ## data
 
@@ -246,7 +192,7 @@ When rendering taxonomy listing pages, additional variables are available:
 
 {% for post in term.pages | sort_by(attribute="date") | reverse %}
 <article>
-    <h2><a href="{{ post.path }}">{{ post.title }}</a></h2>
+    <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
     <time>{{ post.date | date(format="%Y-%m-%d") }}</time>
 </article>
 {% endfor %}
@@ -287,27 +233,29 @@ When pagination is enabled, a `paginator` object is available:
 
 ## Content Collections
 
-All pages and section groupings are available via `data`:
+Content collections are available as lazy Tera functions. They are only evaluated when called, so templates that don't use them pay no performance cost.
 
-### `data.pages`
+### `get_pages()`
 
-Array of all non-draft pages with title, slug, url, date, and tags:
+Returns an array of all non-draft pages with title, slug, url, date, and tags:
 
 ```html
+{% set all_pages = get_pages() %}
 <ul>
-{% for p in data.pages %}
+{% for p in all_pages %}
   <li><a href="{{ p.url }}">{{ p.title }}</a> — {{ p.date }}</li>
 {% endfor %}
 </ul>
 ```
 
-### `data.sections`
+### `get_sections()`
 
-Pages grouped by their top-level directory. For example, pages in `content/blog/` are available as `data.sections.blog`:
+Returns pages grouped by their top-level directory. For example, pages in `content/blog/` are available under the `blog` key:
 
 ```html
+{% set sections = get_sections() %}
 <h2>Blog Posts</h2>
-{% for post in data.sections.blog %}
+{% for post in sections.blog %}
   <article>
     <a href="{{ post.url }}">{{ post.title }}</a>
   </article>
@@ -325,11 +273,11 @@ The `assets` object also provides Subresource Integrity hashes for your CSS and 
 
 ```html
 <link rel="stylesheet"
-      href="{{ assets.css }}"
+      href="{{ assets.css_path }}"
       integrity="{{ assets.css_integrity }}"
       crossorigin="anonymous">
 
-<script src="{{ assets.js }}"
+<script src="{{ assets.js_path }}"
         integrity="{{ assets.js_integrity }}"
         crossorigin="anonymous"
         defer></script>

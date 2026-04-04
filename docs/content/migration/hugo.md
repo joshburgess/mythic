@@ -199,8 +199,8 @@ The migration tool performs automatic syntax conversion for Go templates. Here i
 | `{{ .Site.Title }}`              | `{{ site.title }}`                          |
 | `{{ .Site.BaseURL }}`           | `{{ site.base_url }}`                       |
 | `{{ .Site.Data.nav }}`          | `{{ data.nav }}`                            |
-| `{{ .Permalink }}`              | `{{ site.base_url }}{{ page.path }}`        |
-| `{{ .RelPermalink }}`           | `{{ page.path }}`                           |
+| `{{ .Permalink }}`              | `{{ site.base_url }}{{ page.url }}`         |
+| `{{ .RelPermalink }}`           | `{{ page.url }}`                            |
 | `{{ .WordCount }}`              | `{{ page.word_count }}`                     |
 | `{{ .ReadingTime }}`            | `{{ page.reading_time }}`                   |
 
@@ -258,7 +258,7 @@ Hugo's asset pipeline functions need to be replaced with Mythic's asset system:
 <link rel="stylesheet" href="{{ $style.RelPermalink }}">
 
 <!-- Mythic -->
-<link rel="stylesheet" href="{{ assets.css }}">
+<link rel="stylesheet" href="{{ assets.css_path }}">
 ```
 
 ### Hugo Modules and Themes

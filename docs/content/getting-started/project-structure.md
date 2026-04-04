@@ -157,7 +157,7 @@ styles/
 
 Files prefixed with `_` are treated as partials and are not compiled on their own. They are meant to be imported by other stylesheets.
 
-The compiled CSS is available in templates via `{{ assets.css }}`.
+The compiled CSS is available in templates via `{{ assets.css_path }}`.
 
 ## scripts/
 
@@ -172,7 +172,7 @@ scripts/
     dropdown.js
 ```
 
-The bundled JavaScript is available in templates via `{{ assets.js }}`.
+The bundled JavaScript is available in templates via `{{ assets.js_path }}`.
 
 ## plugins/
 

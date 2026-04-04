@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 authors = ["Josh Burgess"]
 description = "A fast, batteries-included static site generator"
 repository = "https://github.com/joshburgess/mythic"

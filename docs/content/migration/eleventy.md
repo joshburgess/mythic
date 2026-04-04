@@ -316,7 +316,7 @@ tags = { feed = true, paginate = 10 }
 Access in templates:
 
 ```html
-{% for tag in site.taxonomies.tags %}
+{% for tag in taxonomy.terms %}
   <a href="/tags/{{ tag.slug }}/">{{ tag.name }}</a>
 {% endfor %}
 ```

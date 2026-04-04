@@ -1,78 +1,95 @@
 # Mythic
 
-A fast, batteries-included static site generator written in Rust.
+A fast, batteries-included static site generator written in Rust. Faster than Hugo on cold builds, 23x faster on incremental rebuilds.
 
-## Features
+## Getting Started
 
-- **Fast builds** - Parallel markdown rendering, incremental rebuilds (10k pages in 200ms when unchanged)
-- **Live reload** - Dev server with WebSocket-based hot reload, CSS injection without full page refresh
-- **Multi-engine templates** - Tera and Handlebars side by side in the same project
-- **Asset pipeline** - Image optimization (WebP), CSS/JS bundling and minification, Sass/SCSS compilation
-- **Syntax highlighting** - Built-in via syntect with configurable themes and line numbers
-- **Shortcodes** - Custom reusable components as Tera templates with paired and self-closing syntax
-- **Data system** - YAML/TOML/JSON data files with Eleventy-style directory data cascade
-- **Taxonomies** - Tags, categories, and custom taxonomies with listing and term pages
-- **Atom + RSS feeds** - Site-wide and per-taxonomy feeds in both formats
-- **i18n** - Locale directories, hreflang tags, translation files
-- **Plugin system** - Rust trait-based hooks plus Rhai scripting for user plugins
-- **SEO tools** - Sitemap, robots.txt, Schema.org JSON-LD auto-generation, SRI hashes
-- **Accessibility auditing** - Build-time WCAG checks (alt text, lang, headings, viewport, zoom)
-- **Content linting** - Configurable quality rules (word counts, required fields, orphan detection)
-- **Search** - JSON search index generation for client-side search (Fuse.js, Lunr.js)
-- **Pagination** - Paginated taxonomy and listing pages with full paginator context
-- **Redirects** - Frontmatter `aliases` generate HTML redirect files with canonical links
-- **404 pages** - `content/404.md` automatically renders as `404.html` for static hosts
-- **Math rendering** - Inline `$...$` and display `$$...$$` with KaTeX support
-- **Admonitions** - Obsidian-style `> [!NOTE]`, `> [!WARNING]` callout blocks
-- **Related content** - Tag-based relevance engine for "You might also like" sections
-- **Remote data** - Fetch JSON/YAML from APIs at build time with filesystem caching
-- **Computed frontmatter** - Rhai expressions in frontmatter fields (`rhai: word_count / 200`)
-- **Smart diffing** - Deploy manifests showing exactly which files changed between builds
-- **Custom output formats** - JSON API output per-page with site-wide API index
-- **Render hooks** - Customize how markdown links and images are rendered to HTML
-- **Migration tools** - Import from Jekyll, Hugo, or Eleventy
+### Install
 
-## Install
-
-### From source
-
-```bash
-cargo install --path crates/mythic-cli
-```
-
-### From binary
+From binary (Linux/macOS):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/joshburgess/mythic/main/install.sh | sh
 ```
 
-## Quickstart
+From source:
 
 ```bash
-# Create a new site
-mythic init my-site --template blog
+cargo install --path crates/mythic-cli
+```
 
-# Start the dev server
+### Create a site
+
+```bash
+mythic init my-site --template blog
 cd my-site
 mythic serve
 ```
 
-Open http://localhost:3000 in your browser. Edit files and see changes instantly.
+Open http://localhost:3000 and start editing. Changes appear instantly via live reload.
+
+Starter templates: `blank`, `blog`, `docs`, `portfolio`, `minimal`.
+
+## Why Mythic
+
+### Fast
+
+Mythic is faster than Hugo at every scale tested, and 2-3x faster than Eleventy:
+
+| Pages  | Mythic   | Hugo     | Eleventy  |
+|-------:|---------:|---------:|----------:|
+| 1,000  | 150ms    | 171ms    | 300ms     |
+| 5,000  | 740ms    | 851ms    | 1,510ms   |
+| 10,000 | 1,614ms  | 2,925ms  | 3,860ms   |
+
+Incremental rebuilds are where Mythic really shines. When no content has changed, Mythic skips rendering, templating, and writing entirely:
+
+| Pages  | Mythic    | Hugo     | Eleventy  |
+|-------:|----------:|---------:|----------:|
+| 1,000  | **10ms**  | 171ms    | ~300ms    |
+| 10,000 | **125ms** | 2,925ms  | ~3,860ms  |
+
+See [BENCHMARKS.md](BENCHMARKS.md) for full methodology and optimization details.
+
+### Batteries included
+
+Everything you need for a production site, with no plugins or external tools required:
+
+**Content** — Markdown with YAML/TOML frontmatter, syntax highlighting, shortcodes, table of contents, admonitions (`> [!NOTE]`), math rendering (KaTeX), and render hooks for links and images.
+
+**Templates** — Tera and Handlebars side by side in the same project. Custom filters for reading time, word count, and Hugo-compatible helpers.
+
+**Assets** — Image optimization with automatic WebP generation and responsive `<picture>` tags. CSS/JS bundling and minification. Sass/SCSS compilation. SRI integrity hashes.
+
+**Data** — Load YAML, TOML, or JSON from `_data/` files. Directory data cascade. Fetch remote APIs at build time with filesystem caching. Computed frontmatter via Rhai expressions.
+
+**SEO** — Sitemap, robots.txt, Schema.org JSON-LD, Atom + RSS + JSON Feed generation (site-wide and per-taxonomy), canonical URLs, and hreflang tags for i18n.
+
+**Quality** — Build-time accessibility auditing (WCAG), link checking, heading hierarchy validation, and configurable content linting (word counts, required fields, orphan detection).
+
+**Dev experience** — Dev server with WebSocket live reload, CSS injection without full page refresh, and error overlays. Config and template changes trigger automatic rebuilds.
+
+### Extensible
+
+- **Plugin system** — Rust trait-based hooks plus Rhai scripting for user-defined build logic
+- **Taxonomies** — Tags, categories, and custom taxonomies with paginated listing pages
+- **i18n** — Locale directories, translation files, hreflang tags
+- **Migration tools** — Import existing sites from Jekyll, Hugo, or Eleventy
+- **Custom output formats** — JSON API output alongside HTML
 
 ## Commands
 
 ```
-mythic init <name>              Create a new site (--template: blank, blog, docs, portfolio, minimal)
+mythic init <name>              Create a new site (--template blog)
 mythic new <type> "Title"       Create a new content file (--draft)
-mythic build                    Build the site (--clean, --drafts, --profile, --quiet, --json)
-mythic serve                    Dev server with live reload (--port, --open, --drafts)
-mythic watch                    Watch for changes and rebuild without a server
-mythic check                    Validate links, images, and heading hierarchy
-mythic list                     List all content pages with dates and slugs (--drafts)
+mythic build                    Build the site (--clean, --drafts, --profile, --json)
+mythic serve                    Dev server with live reload (--port, --open)
+mythic watch                    Watch and rebuild without a server
+mythic check                    Validate links, images, and headings
+mythic list                     List all content pages (--drafts)
 mythic clean                    Delete the output directory
-mythic migrate --from <ssg>     Import from jekyll, hugo, hugo-theme, or eleventy
-mythic completions <shell>      Generate shell completions (bash, zsh, fish, powershell)
-mythic --version                Show version
+mythic migrate --from <ssg>     Import from jekyll, hugo, or eleventy
+mythic completions <shell>      Generate shell completions
 ```
 
 ## Project Structure
@@ -84,7 +101,7 @@ my-site/
   templates/           # Tera (.html) and Handlebars (.hbs) templates
   _data/               # YAML/TOML/JSON data files
   static/              # Static assets (copied as-is)
-  styles/              # CSS and SCSS files (bundled + minified)
+  styles/              # CSS/SCSS files (bundled + minified)
   scripts/             # JavaScript files (bundled + minified)
   shortcodes/          # Shortcode templates
   plugins/             # Rhai plugin scripts
@@ -109,10 +126,6 @@ author = "Author Name"
 [highlight]
 theme = "base16-ocean.dark"
 line_numbers = false
-
-[toc]
-min_level = 2
-max_level = 4
 ```
 
 See the [configuration reference](docs/content/configuration/reference.md) for all options.
@@ -125,34 +138,20 @@ Templates receive these variables:
 |----------|-------------|
 | `{{ page.title }}` | Page title from frontmatter |
 | `{{ page.date }}` | Page date |
+| `{{ page.slug }}` | Page slug |
+| `{{ page.url }}` | Page URL path |
 | `{{ page.tags }}` | Tag list |
 | `{{ page.extra }}` | Custom frontmatter fields |
 | `{{ content \| safe }}` | Rendered HTML content |
 | `{{ site.title }}` | Site title from config |
 | `{{ site.base_url }}` | Base URL from config |
+| `{{ site.base_path }}` | URL path prefix (for subpath deploys) |
 | `{{ toc }}` | Table of contents entries |
-| `{{ data.paginator }}` | Pagination context (on taxonomy pages) |
 | `{{ assets.css_path }}` | Hashed CSS bundle path |
 | `{{ assets.js_path }}` | Hashed JS bundle path |
 | `{{ data }}` | Data from `_data/` files |
-| `{{ data.pages }}` | All pages as array (title, slug, url, date, tags) |
-| `{{ data.sections.blog }}` | Pages grouped by section |
-
-## Performance
-
-Benchmarked against Hugo and Eleventy on identical synthetic sites (Apple M-series, release build):
-
-| Pages  | Mythic   | Hugo     | Eleventy  |
-|-------:|---------:|---------:|----------:|
-| 1,000  | 150ms    | 171ms    | 300ms     |
-| 5,000  | 740ms    | 851ms    | 1,510ms   |
-| 10,000 | 1,614ms  | 2,925ms  | 3,860ms   |
-
-**Cold builds**: Mythic is faster than Hugo at every scale — 12% faster at 1k pages, 45% faster at 10k pages.
-
-**Incremental rebuilds** (no changes): Mythic **125ms** at 10k pages, vs Hugo 2,925ms — **23x faster**. Mythic skips rendering, templating, and writing for unchanged pages entirely.
-
-See [BENCHMARKS.md](BENCHMARKS.md) for full methodology, pipeline profiling, and optimization history.
+| `{{ get_pages() }}` | All pages (title, slug, url, date, tags) |
+| `{{ get_sections() }}` | Pages grouped by content section |
 
 ## Deploy
 
@@ -181,9 +180,7 @@ jobs:
         id: deploy
 ```
 
-### Other platforms
-
-Works with any static hosting. See deployment docs for [Netlify, Vercel, and Cloudflare Pages](docs/content/deployment/other.md).
+Works with any static host. See deployment docs for [Netlify, Vercel, and Cloudflare Pages](docs/content/deployment/other.md).
 
 ## Architecture
 
@@ -192,7 +189,7 @@ Cargo workspace with six crates:
 | Crate | Purpose |
 |-------|---------|
 | `mythic-core` | Config, content discovery, build pipeline, caching, plugins |
-| `mythic-markdown` | Frontmatter, pulldown-cmark rendering, shortcodes, TOC, syntax highlighting |
+| `mythic-markdown` | Frontmatter, markdown rendering, shortcodes, syntax highlighting |
 | `mythic-template` | Tera + Handlebars multi-engine rendering |
 | `mythic-assets` | Image processing, CSS/JS bundling, Sass compilation |
 | `mythic-server` | Dev server (axum), file watcher, WebSocket live reload |
@@ -200,4 +197,9 @@ Cargo workspace with six crates:
 
 ## License
 
-MIT
+Licensed under either of
+
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
+
+at your option.

@@ -72,7 +72,7 @@ minify_css = true
 Reference the compiled CSS in your templates:
 
 ```html
-<link rel="stylesheet" href="{{ assets.css }}">
+<link rel="stylesheet" href="{{ assets.css_path }}">
 ```
 
 In development, this resolves to `/css/main.css`. In production with hashing enabled, it becomes `/css/main.a1b2c3d4.css`.
@@ -119,7 +119,7 @@ minify_js = true
 ### Using in Templates
 
 ```html
-<script src="{{ assets.js }}" defer></script>
+<script src="{{ assets.js_path }}" defer></script>
 ```
 
 ## Image Pipeline
@@ -199,7 +199,7 @@ With hashing enabled:
 /images/logo.png    -> /images/logo.9c8d7e6f.png
 ```
 
-Template variables (`assets.css`, `assets.js`) automatically resolve to the hashed filenames. No manual updates needed.
+Template variables (`assets.css_path`, `assets.js_path`) automatically resolve to the hashed filenames. No manual updates needed.
 
 Content hashing is disabled during development (`mythic serve`) for easier debugging.
 

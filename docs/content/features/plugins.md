@@ -105,7 +105,7 @@ pub struct SearchIndexPlugin;
 #[derive(Serialize)]
 struct SearchEntry {
     title: String,
-    path: String,
+    url: String,
     content: String,
     tags: Vec<String>,
 }
@@ -116,11 +116,11 @@ impl Plugin for SearchIndexPlugin {
     }
 
     fn on_finish(&self, site: &Site, output: &Path) -> Result<()> {
-        let entries: Vec<SearchEntry> = site.pages.iter()
+        let entries: Vec<SearchEntry> = site.pages().iter()
             .filter(|p| !p.draft)
             .map(|p| SearchEntry {
                 title: p.title.clone(),
-                path: p.path.clone(),
+                url: p.url.clone(),
                 content: p.plain_text.clone(),
                 tags: p.tags.clone(),
             })

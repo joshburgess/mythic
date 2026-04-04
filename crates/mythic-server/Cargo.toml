@@ -3,14 +3,14 @@ name = "mythic-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description.workspace = true
+description = "Development server with live reload and file watching for the Mythic static site generator"
 repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-mythic-core = { path = "../mythic-core" }
+mythic-core = { path = "../mythic-core", version = "0.1.0" }
 notify = "7"
 notify-debouncer-mini = "0.5"
 axum = { version = "0.8", features = ["ws"] }
