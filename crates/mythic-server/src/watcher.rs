@@ -124,16 +124,23 @@ mod tests {
         let watcher = FileWatcher::new(&config, dir.path()).unwrap();
 
         // Modify the file
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(100));
         std::fs::write(content.join("test.md"), "# Updated").unwrap();
 
-        // Wait for debounced event
-        let event = watcher.rx.recv_timeout(Duration::from_secs(2)).unwrap();
-        match event {
-            WatchEvent::ContentChanged(p) => {
-                assert!(p.ends_with("test.md"));
+        // Drain events until we find the expected ContentChanged for test.md.
+        // On some platforms (macOS), the watcher may fire for initial setup
+        // events before delivering the modification event.
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                panic!("Timed out waiting for ContentChanged(test.md)");
             }
-            other => panic!("Expected ContentChanged, got {:?}", other),
+            match watcher.rx.recv_timeout(remaining) {
+                Ok(WatchEvent::ContentChanged(p)) if p.ends_with("test.md") => break,
+                Ok(_) => continue, // skip unrelated events
+                Err(_) => panic!("Timed out waiting for ContentChanged(test.md)"),
+            }
         }
     }
 
