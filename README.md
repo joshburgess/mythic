@@ -6,6 +6,12 @@ A fast, batteries-included static site generator written in Rust. Faster than Hu
 
 ### Install
 
+From crates.io:
+
+```bash
+cargo install mythic-cli
+```
+
 From binary (Linux/macOS):
 
 ```bash
@@ -15,7 +21,8 @@ curl -fsSL https://raw.githubusercontent.com/joshburgess/mythic/main/install.sh 
 From source:
 
 ```bash
-cargo install --path crates/mythic-cli
+git clone https://github.com/joshburgess/mythic.git
+cargo install --path mythic/crates/mythic-cli
 ```
 
 ### Create a site
