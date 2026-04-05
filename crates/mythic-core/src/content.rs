@@ -70,6 +70,7 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
             frontmatter,
             raw_content: body,
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash,
             toc: Vec::new(),

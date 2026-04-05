@@ -30,8 +30,9 @@ pub fn generate_search_index(pages: &[Page], output_dir: &Path, base_url: &str) 
         .filter(|p| !p.source_path.to_string_lossy().starts_with('<'))
         .map(|page| {
             let summary = page
-                .rendered_html
+                .body_html
                 .as_deref()
+                .or(page.rendered_html.as_deref())
                 .or(Some(&page.raw_content))
                 .map(|s| strip_html_and_truncate(s, 200))
                 .unwrap_or_default();
@@ -106,6 +107,7 @@ mod tests {
             },
             raw_content: content.to_string(),
             rendered_html: Some(format!("<p>{content}</p>")),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),

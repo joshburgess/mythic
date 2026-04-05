@@ -160,6 +160,11 @@ where
     render_fn(&mut changed_pages);
     let render_ms = t1.elapsed().as_millis();
 
+    // Capture body HTML before template application (for feeds/search summaries)
+    for page in &mut changed_pages {
+        page.body_html = page.rendered_html.clone();
+    }
+
     // Apply templates in parallel (only changed pages)
     let t2 = Instant::now();
     if let Some(ref tmpl_fn) = template_fn {

@@ -128,8 +128,9 @@ fn render_atom_feed(
         let date_rfc = format!("{date}T00:00:00Z");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -181,8 +182,9 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -
         let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -216,8 +218,9 @@ fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) 
             let page_url = format!("{base_url}/{}/", page.slug);
             let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
             let summary = page
-                .rendered_html
+                .body_html
                 .as_deref()
+                .or(page.rendered_html.as_deref())
                 .or(Some(&page.raw_content))
                 .map(|s| strip_html_and_truncate(s, 200))
                 .unwrap_or_default();
@@ -321,6 +324,7 @@ mod tests {
             },
             raw_content: "Some content here".to_string(),
             rendered_html: Some("<p>Some content here</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -437,6 +441,7 @@ mod tests {
             },
             raw_content: "content".to_string(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),

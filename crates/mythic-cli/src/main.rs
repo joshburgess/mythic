@@ -885,6 +885,7 @@ fn post_build(
                             },
                             raw_content: String::new(),
                             rendered_html: None,
+                            body_html: None,
                             output_path: None,
                             content_hash: 0,
                             toc: Vec::new(),
