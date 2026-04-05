@@ -10,7 +10,7 @@ repository.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-mythic-core = { path = "../mythic-core", version = "0.2.1" }
+mythic-core = { path = "../mythic-core", version = "0.2.2" }
 notify = "7"
 notify-debouncer-mini = "0.5"
 axum = { version = "0.8", features = ["ws"] }
