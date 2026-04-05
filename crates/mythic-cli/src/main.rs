@@ -463,6 +463,27 @@ fn format_template_error(err: &anyhow::Error) -> String {
 
 // --- mythic new command ---
 
+fn pluralize_simple(word: &str) -> String {
+    if word.ends_with('z') {
+        format!("{word}zes")
+    } else if word.ends_with("s")
+        || word.ends_with("sh")
+        || word.ends_with("ch")
+        || word.ends_with("x")
+    {
+        format!("{word}es")
+    } else if word.ends_with("y")
+        && !word.ends_with("ay")
+        && !word.ends_with("ey")
+        && !word.ends_with("oy")
+        && !word.ends_with("uy")
+    {
+        format!("{}ies", &word[..word.len() - 1])
+    } else {
+        format!("{word}s")
+    }
+}
+
 fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path.parent().unwrap_or_else(|| Path::new("."));
@@ -483,7 +504,7 @@ fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> 
     let dir = if content_type == "page" {
         content_dir.clone()
     } else {
-        content_dir.join(format!("{content_type}s"))
+        content_dir.join(pluralize_simple(content_type))
     };
 
     std::fs::create_dir_all(&dir)?;
@@ -836,7 +857,7 @@ fn post_build(
 
     // Generate redirect pages from aliases
     let redirect_count =
-        mythic_core::redirects::generate_redirects(pages, output_dir, &site_config.base_url)?;
+        mythic_core::redirects::generate_redirects(pages, output_dir, &site_config.base_url, site_config.ugly_urls)?;
     if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }
@@ -1194,4 +1215,39 @@ fn extract_embedded_dir(dir: &include_dir::Dir, dest: &Path) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pluralize_regular_words() {
+        assert_eq!(pluralize_simple("post"), "posts");
+        assert_eq!(pluralize_simple("page"), "pages");
+        assert_eq!(pluralize_simple("tag"), "tags");
+    }
+
+    #[test]
+    fn pluralize_sibilant_endings() {
+        assert_eq!(pluralize_simple("class"), "classes");
+        assert_eq!(pluralize_simple("bush"), "bushes");
+        assert_eq!(pluralize_simple("match"), "matches");
+        assert_eq!(pluralize_simple("box"), "boxes");
+        assert_eq!(pluralize_simple("quiz"), "quizzes");
+    }
+
+    #[test]
+    fn pluralize_consonant_y() {
+        assert_eq!(pluralize_simple("category"), "categories");
+        assert_eq!(pluralize_simple("gallery"), "galleries");
+    }
+
+    #[test]
+    fn pluralize_vowel_y_unchanged() {
+        assert_eq!(pluralize_simple("day"), "days");
+        assert_eq!(pluralize_simple("key"), "keys");
+        assert_eq!(pluralize_simple("boy"), "boys");
+        assert_eq!(pluralize_simple("guy"), "guys");
+    }
 }

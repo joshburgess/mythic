@@ -216,4 +216,11 @@ mod tests {
         let result = paginate(&pages, 10, "blog", "https://mysite.org");
         assert_eq!(result[0].1.pages[0].url, "https://mysite.org/post-0/");
     }
+
+    #[test]
+    fn page_urls_use_base_path() {
+        let pages = make_pages(5);
+        let result = paginate(&pages, 10, "blog", "/blog");
+        assert_eq!(result[0].1.pages[0].url, "/blog/post-0/");
+    }
 }

@@ -40,7 +40,8 @@ pub fn build_taxonomies(config: &SiteConfig, pages: &[Page]) -> Vec<Taxonomy> {
 }
 
 fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
-    let mut terms_map: HashMap<String, Vec<TaxonomyPageRef>> = HashMap::new();
+    // Map from slug -> (original_display_name, page_refs)
+    let mut terms_map: HashMap<String, (String, Vec<TaxonomyPageRef>)> = HashMap::new();
 
     for page in pages {
         let values = extract_taxonomy_values(&page.frontmatter, &tc.name);
@@ -53,21 +54,27 @@ fn build_one_taxonomy(tc: &TaxonomyConfig, pages: &[Page]) -> Taxonomy {
             if slug.is_empty() {
                 continue;
             }
-            terms_map.entry(slug).or_default().push(TaxonomyPageRef {
+            let entry = terms_map
+                .entry(slug)
+                .or_insert_with(|| (value.clone(), Vec::new()));
+            entry.1.push(TaxonomyPageRef {
                 title: page.frontmatter.title.to_string(),
                 slug: page.slug.clone(),
                 date: page.frontmatter.date.as_ref().map(|d| d.to_string()),
-                url: format!("/{}/", page.slug),
+                url: if page.slug == "index" {
+                    "/".to_string()
+                } else {
+                    format!("/{}/", page.slug)
+                },
             });
         }
     }
 
     let mut terms: Vec<TaxonomyTerm> = terms_map
         .into_iter()
-        .map(|(slug, mut pages)| {
+        .map(|(slug, (name, mut pages))| {
             // Sort by date descending
             pages.sort_by(|a, b| b.date.cmp(&a.date));
-            let name = slug.clone(); // Will be the slugified form
             TaxonomyTerm { name, slug, pages }
         })
         .collect();
@@ -210,6 +217,7 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config
     }
@@ -256,11 +264,13 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config.taxonomies.push(TaxonomyConfig {
             name: "categories".to_string(),
             slug: "category".to_string(),
             feed: false,
+            per_page: 10,
         });
 
         let mut pages = vec![page_with_tags("Post", "post", vec!["rust"], None)];
@@ -475,5 +485,79 @@ mod tests {
         // Both pages should map to the same term
         assert_eq!(taxonomies[0].terms.len(), 1);
         assert_eq!(taxonomies[0].terms[0].pages.len(), 2);
+    }
+
+    #[test]
+    fn term_names_preserve_original_casing() {
+        let config = config_with_tags();
+        let pages = vec![page_with_tags(
+            "Post",
+            "post",
+            vec!["Machine Learning", "iOS"],
+            None,
+        )];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let names: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect();
+        // The display name should preserve the original casing even though
+        // the slug is lowercased
+        assert!(
+            names.contains(&"Machine Learning"),
+            "Term name should preserve original casing, got: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"iOS"),
+            "Term name should preserve original casing, got: {:?}",
+            names
+        );
+        // But slugs should be lowercased
+        let slugs: Vec<&str> = taxonomies[0]
+            .terms
+            .iter()
+            .map(|t| t.slug.as_str())
+            .collect();
+        assert!(slugs.contains(&"machine-learning"));
+        assert!(slugs.contains(&"ios"));
+    }
+
+    #[test]
+    fn term_urls_include_base_path() {
+        let mut config = SiteConfig::for_testing("Test", "https://example.com/blog");
+        config.taxonomies.push(TaxonomyConfig {
+            name: "tags".to_string(),
+            slug: "tags".to_string(),
+            feed: true,
+            per_page: 10,
+        });
+
+        let pages = vec![page_with_tags("Post", "my-post", vec!["rust"], None)];
+        let taxonomies = build_taxonomies(&config, &pages);
+        let rust = &taxonomies[0].terms[0];
+
+        // Page URL should include a proper path
+        assert_eq!(
+            rust.pages[0].url, "/my-post/",
+            "Taxonomy page URLs should have correct path"
+        );
+    }
+
+    #[test]
+    fn index_page_url_is_root_slash() {
+        let config = config_with_tags();
+        let pages = vec![page_with_tags("Home", "index", vec!["featured"], None)];
+
+        let taxonomies = build_taxonomies(&config, &pages);
+        let term = &taxonomies[0].terms[0];
+
+        // The index page URL should be "/" not "/index/"
+        assert_eq!(
+            term.pages[0].url, "/",
+            "Index page URL should be '/' not '/index/'"
+        );
     }
 }
