@@ -117,7 +117,7 @@ Controls the build process and output.
 | Option                    | Type    | Default    | Description                                         |
 |---------------------------|---------|------------|-----------------------------------------------------|
 | `output`                  | String  | `"public"` | Output directory for the built site                 |
-| `template_engine`         | String  | `"tera"`   | Default template engine (`"tera"` or `"handlebars"`)|
+| `template_engine`         | String  | `"tera"`   | Default template engine (`"tera"`, `"handlebars"`, or `"minijinja"`)|
 | `drafts`                  | Boolean | `false`    | Include draft pages in builds                       |
 | `deep_merge_frontmatter`  | Boolean | `false`    | Deep merge `_dir.yaml` defaults with page frontmatter|
 | `parallel`                | Boolean | `true`     | Use parallel processing during builds               |

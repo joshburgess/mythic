@@ -458,6 +458,11 @@ fn format_template_error(err: &anyhow::Error) -> String {
         return format!("{} {msg}", "Template error:".red().bold());
     }
 
+    // Extract useful info from MiniJinja errors
+    if msg.contains("Failed to render MiniJinja") || msg.contains("Failed to find MiniJinja") {
+        return format!("{} {msg}", "Template error:".red().bold());
+    }
+
     msg
 }
 

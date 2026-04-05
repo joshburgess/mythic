@@ -18,7 +18,7 @@ my-site/
       _dir.yaml          # Section defaults
       first-post.md
       second-post.md
-  templates/             # Template files (Tera or Handlebars)
+  templates/             # Template files (Tera, Handlebars, or MiniJinja)
     base.tera.html
     page.tera.html
     blog.tera.html
@@ -90,7 +90,7 @@ A file named `index.md` in any directory becomes the index page for that section
 
 ## templates/
 
-Template files control how your content is rendered into HTML. Mythic supports both Tera (`.tera.html`) and Handlebars (`.hbs.html`) templates.
+Template files control how your content is rendered into HTML. Mythic supports Tera (`.tera.html`), Handlebars (`.hbs.html`), and MiniJinja (`.jinja.html`, `.j2.html`, `.jinja2.html`) templates.
 
 ```
 templates/

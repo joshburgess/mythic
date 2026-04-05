@@ -350,14 +350,14 @@ To output literal curly braces, use a raw block:
 {{{{/raw}}}}
 ```
 
-## Choosing Between Tera and Handlebars
+## Choosing Between Tera, Handlebars, and MiniJinja
 
-| Feature              | Tera               | Handlebars          |
-|----------------------|---------------------|---------------------|
-| Logic in templates   | Full expressions    | Helper-based        |
-| Template inheritance | `extends` / `block` | Partial blocks     |
-| Macros               | Yes                 | No (use partials)   |
-| Filters              | Pipe syntax         | Helper syntax       |
-| Learning curve       | Moderate            | Low                 |
+| Feature              | Tera               | Handlebars          | MiniJinja            |
+|----------------------|---------------------|---------------------|----------------------|
+| Logic in templates   | Full expressions    | Helper-based        | Full expressions     |
+| Template inheritance | `extends` / `block` | Partial blocks     | `extends` / `block`  |
+| Macros               | Yes                 | No (use partials)   | Yes                  |
+| Filters              | Pipe syntax         | Helper syntax       | Pipe syntax          |
+| Learning curve       | Moderate            | Low                 | Low–Moderate         |
 
-You can use both engines in the same project. Each template file's extension determines which engine renders it.
+You can use all three engines in the same project. Each template file's extension determines which engine renders it.

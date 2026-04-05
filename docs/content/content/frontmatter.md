@@ -183,7 +183,7 @@ description: "A complete guide to setting up Mythic for your first project."
 
 ### template_engine
 
-**Type:** String (`"tera"` or `"handlebars"`)
+**Type:** String (`"tera"`, `"handlebars"`, or `"minijinja"`)
 **Required:** No
 
 Overrides the template engine for this specific page:

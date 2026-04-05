@@ -15,7 +15,7 @@ cargo test --workspace
 crates/
   mythic-core/       # Core library: config, content, build pipeline, plugins
   mythic-markdown/   # Markdown processing, frontmatter, shortcodes, highlighting
-  mythic-template/   # Template engines (Tera + Handlebars)
+  mythic-template/   # Template engines (Tera + Handlebars + MiniJinja)
   mythic-assets/     # Asset pipeline (images, CSS, JS, Sass)
   mythic-server/     # Dev server, file watcher, live reload
   mythic-cli/        # CLI binary
