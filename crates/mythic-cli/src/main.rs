@@ -676,7 +676,7 @@ fn full_build(
     template_extra.insert(
         "css_path".to_string(),
         serde_json::to_value(
-            &assets_manifest
+            assets_manifest
                 .css_path
                 .as_ref()
                 .map(|p| format!("{base_path}{p}")),
@@ -685,7 +685,7 @@ fn full_build(
     template_extra.insert(
         "js_path".to_string(),
         serde_json::to_value(
-            &assets_manifest
+            assets_manifest
                 .js_path
                 .as_ref()
                 .map(|p| format!("{base_path}{p}")),
