@@ -7,10 +7,19 @@ use std::path::Path;
 ///
 /// Order: alphabetical, with `.scss`/`.sass` files compiled to CSS first.
 pub fn compile_and_concat(styles_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(styles_dir)
-        .with_context(|| format!("Failed to read styles dir: {}", styles_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(styles_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
+            if !e.file_type().is_file() {
+                return false;
+            }
+            let name = e.file_name().to_string_lossy().to_string();
+            // Skip Sass partials (files starting with '_') — they are meant
+            // to be @imported, not compiled independently.
+            if name.starts_with('_') {
+                return false;
+            }
             matches!(
                 e.path().extension().and_then(|x| x.to_str()),
                 Some("css" | "scss" | "sass")
@@ -18,11 +27,11 @@ pub fn compile_and_concat(styles_dir: &Path) -> Result<String> {
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {
-        let path = entry.path();
+        let path = entry.path().to_path_buf();
         let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("");
 
         let css = match ext {
@@ -96,5 +105,31 @@ mod tests {
         assert!(result.contains("color: green"));
         assert!(result.contains("font-size: 16px"));
         assert!(!result.contains("$size"));
+    }
+
+    #[test]
+    fn sass_partials_excluded_from_compilation() {
+        let dir = tempfile::tempdir().unwrap();
+        // A partial (starts with _) should not be compiled independently
+        std::fs::write(
+            dir.path().join("_variables.scss"),
+            "$color: red;\nbody { color: $color; }",
+        )
+        .unwrap();
+        // A non-partial that imports it
+        std::fs::write(
+            dir.path().join("main.scss"),
+            "@import 'variables';\nh1 { font-size: 2em; }",
+        )
+        .unwrap();
+
+        let result = compile_and_concat(dir.path()).unwrap();
+        // The partial should not appear twice (once from its own compilation
+        // and once from the import). It should only appear via the import in main.scss.
+        let body_count = result.matches("color: red").count();
+        assert_eq!(
+            body_count, 1,
+            "Partial should only be included via @import, not compiled independently. Got:\n{result}"
+        );
     }
 }

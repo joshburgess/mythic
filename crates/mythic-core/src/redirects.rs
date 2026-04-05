@@ -9,7 +9,12 @@ use crate::page::Page;
 ///
 /// For each alias URL, generates an HTML file with a `<meta http-equiv="refresh">`
 /// redirect to the page's canonical URL.
-pub fn generate_redirects(pages: &[Page], output_dir: &Path, base_url: &str) -> Result<usize> {
+pub fn generate_redirects(
+    pages: &[Page],
+    output_dir: &Path,
+    base_url: &str,
+    ugly_urls: bool,
+) -> Result<usize> {
     let base_url = base_url.trim_end_matches('/');
     let mut count = 0;
 
@@ -19,11 +24,19 @@ pub fn generate_redirects(pages: &[Page], output_dir: &Path, base_url: &str) -> 
             _ => continue,
         };
 
-        let canonical_url = format!("{base_url}/{}/", page.slug);
+        let canonical_url = if ugly_urls {
+            format!("{base_url}/{}.html", page.slug)
+        } else {
+            format!("{base_url}/{}/", page.slug)
+        };
 
         for alias in aliases {
             let alias_path = alias.trim_matches('/');
-            let dest = output_dir.join(alias_path).join("index.html");
+            let dest = if ugly_urls {
+                output_dir.join(format!("{alias_path}.html"))
+            } else {
+                output_dir.join(alias_path).join("index.html")
+            };
 
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -70,6 +83,7 @@ mod tests {
             },
             raw_content: String::new(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -81,7 +95,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let pages = vec![page_with_aliases("blog/new-post", vec!["/old-post/"])];
 
-        let count = generate_redirects(&pages, dir.path(), "https://example.com").unwrap();
+        let count = generate_redirects(&pages, dir.path(), "https://example.com", false).unwrap();
         assert_eq!(count, 1);
 
         let redirect = std::fs::read_to_string(dir.path().join("old-post/index.html")).unwrap();
@@ -98,7 +112,7 @@ mod tests {
             vec!["/getting-started/", "/tutorial/", "/docs/intro/"],
         )];
 
-        let count = generate_redirects(&pages, dir.path(), "https://example.com").unwrap();
+        let count = generate_redirects(&pages, dir.path(), "https://example.com", false).unwrap();
         assert_eq!(count, 3);
         assert!(dir.path().join("getting-started/index.html").exists());
         assert!(dir.path().join("tutorial/index.html").exists());
@@ -117,12 +131,44 @@ mod tests {
             },
             raw_content: String::new(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
         }];
 
-        let count = generate_redirects(&pages, dir.path(), "https://example.com").unwrap();
+        let count = generate_redirects(&pages, dir.path(), "https://example.com", false).unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn ugly_urls_creates_flat_redirect_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let pages = vec![page_with_aliases("blog/new-post", vec!["/old-post/"])];
+
+        let count = generate_redirects(&pages, dir.path(), "https://example.com", true).unwrap();
+        assert_eq!(count, 1);
+
+        // Should create old-post.html, NOT old-post/index.html
+        assert!(dir.path().join("old-post.html").exists());
+        assert!(!dir.path().join("old-post/index.html").exists());
+
+        let redirect = std::fs::read_to_string(dir.path().join("old-post.html")).unwrap();
+        assert!(redirect.contains("https://example.com/blog/new-post.html"));
+        assert!(!redirect.contains("new-post/\""));
+    }
+
+    #[test]
+    fn ugly_urls_multiple_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let pages = vec![page_with_aliases(
+            "docs/guide",
+            vec!["/getting-started/", "/tutorial/"],
+        )];
+
+        let count = generate_redirects(&pages, dir.path(), "https://example.com", true).unwrap();
+        assert_eq!(count, 2);
+        assert!(dir.path().join("getting-started.html").exists());
+        assert!(dir.path().join("tutorial.html").exists());
     }
 }

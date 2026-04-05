@@ -101,6 +101,7 @@ fn render_atom_feed(
     pages: &[&Page],
     _site_url: &str,
 ) -> String {
+    let base_url = base_url.trim_end_matches('/');
     let updated = pages
         .first()
         .and_then(|p| p.frontmatter.date.as_deref())
@@ -128,8 +129,9 @@ fn render_atom_feed(
         let date_rfc = format!("{date}T00:00:00Z");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -144,7 +146,7 @@ fn render_atom_feed(
         xml.push_str(&format!("    <updated>{date_rfc}</updated>\n"));
         xml.push_str(&format!("    <published>{date_rfc}</published>\n"));
         xml.push_str(&format!(
-            "    <summary>{}</summary>\n",
+            "    <summary type=\"text\">{}</summary>\n",
             escape_xml(&summary)
         ));
         xml.push_str("  </entry>\n");
@@ -181,8 +183,9 @@ fn render_rss_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) -
         let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
 
         let summary = page
-            .rendered_html
+            .body_html
             .as_deref()
+            .or(page.rendered_html.as_deref())
             .or(Some(&page.raw_content))
             .map(|s| strip_html_and_truncate(s, 200))
             .unwrap_or_default();
@@ -216,8 +219,9 @@ fn render_json_feed(title: &str, base_url: &str, author: &str, pages: &[&Page]) 
             let page_url = format!("{base_url}/{}/", page.slug);
             let date = page.frontmatter.date.as_deref().unwrap_or("1970-01-01");
             let summary = page
-                .rendered_html
+                .body_html
                 .as_deref()
+                .or(page.rendered_html.as_deref())
                 .or(Some(&page.raw_content))
                 .map(|s| strip_html_and_truncate(s, 200))
                 .unwrap_or_default();
@@ -321,6 +325,7 @@ mod tests {
             },
             raw_content: "Some content here".to_string(),
             rendered_html: Some("<p>Some content here</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -338,6 +343,7 @@ mod tests {
             name: "tags".to_string(),
             slug: "tags".to_string(),
             feed: true,
+            per_page: 10,
         });
         config
     }
@@ -437,6 +443,7 @@ mod tests {
             },
             raw_content: "content".to_string(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -624,5 +631,41 @@ mod tests {
         // Control characters must be stripped
         assert!(!feed.contains('\x0B'), "Vertical tab should be stripped");
         assert!(!feed.contains('\x00'), "Null byte should be stripped");
+    }
+
+    #[test]
+    fn atom_self_link_no_double_slashes_with_trailing_slash_base_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = feed_config();
+        // base_url with trailing slash
+        config.base_url = "https://example.com/".to_string();
+        let pages = vec![page("Post", "hello", "2024-01-01", vec![])];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        // The self-link should not have double slashes after the domain
+        assert!(
+            !feed.contains("example.com//"),
+            "Feed should not have double slashes in URLs, got: {feed}"
+        );
+        assert!(feed.contains("example.com/feed.xml"));
+    }
+
+    #[test]
+    fn atom_summary_has_type_text_attribute() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = feed_config();
+        let pages = vec![page("Post", "hello", "2024-01-01", vec![])];
+        let taxonomies = build_taxonomies(&config, &pages);
+
+        generate_feeds(&config, &pages, &taxonomies, dir.path()).unwrap();
+
+        let feed = std::fs::read_to_string(dir.path().join("feed.xml")).unwrap();
+        assert!(
+            feed.contains("type=\"text\""),
+            "Atom <summary> should have type=\"text\" attribute, got: {feed}"
+        );
     }
 }

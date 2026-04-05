@@ -109,23 +109,32 @@ where
     let output_dir = root.join(&config.output_dir);
     let mut cache = DepGraph::load(&output_dir);
 
-    // Hash config + templates so changes to either invalidate all pages.
-    // This is cheap (small files) and ensures config/template edits trigger rebuilds.
+    // Hash config, templates, data, styles, scripts, and shortcodes so changes
+    // to any of them invalidate all pages. This is cheap (small files) and ensures
+    // rebuilds are triggered correctly.
     let env_hash = {
         let state = ahash::RandomState::with_seeds(91, 82, 73, 64);
         let mut hasher = state.build_hasher();
         if let Ok(cfg_bytes) = std::fs::read(root.join("mythic.toml")) {
             cfg_bytes.hash(&mut hasher);
         }
-        let tmpl_dir = root.join(&config.template_dir);
-        if tmpl_dir.exists() {
-            for entry in walkdir::WalkDir::new(&tmpl_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-            {
-                if let Ok(bytes) = std::fs::read(entry.path()) {
-                    bytes.hash(&mut hasher);
+        let dirs_to_hash = [
+            root.join(&config.template_dir),
+            root.join(&config.data_dir),
+            root.join(&config.styles_dir),
+            root.join(&config.scripts_dir),
+            root.join("shortcodes"),
+        ];
+        for dir in &dirs_to_hash {
+            if dir.exists() {
+                for entry in walkdir::WalkDir::new(dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    if let Ok(bytes) = std::fs::read(entry.path()) {
+                        bytes.hash(&mut hasher);
+                    }
                 }
             }
         }
@@ -150,6 +159,11 @@ where
     let t1 = Instant::now();
     render_fn(&mut changed_pages);
     let render_ms = t1.elapsed().as_millis();
+
+    // Capture body HTML before template application (for feeds/search summaries)
+    for page in &mut changed_pages {
+        page.body_html = page.rendered_html.clone();
+    }
 
     // Apply templates in parallel (only changed pages)
     let t2 = Instant::now();
@@ -183,9 +197,13 @@ where
         }
         if ugly_urls {
             // Flat output: slug "blog/post" → output_dir/blog/post.html
-            // No per-page directory creation needed.
             let file = output_dir.join(format!("{}.html", page.slug));
             let dir = file.parent().unwrap_or(&output_dir).to_path_buf();
+            to_write.push(WriteJob { page, dir, file });
+        } else if page.slug == "index" {
+            // Root index page: output_dir/index.html (not index/index.html)
+            let file = output_dir.join("index.html");
+            let dir = output_dir.to_path_buf();
             to_write.push(WriteJob { page, dir, file });
         } else {
             // Clean URLs: slug "blog/post" → output_dir/blog/post/index.html

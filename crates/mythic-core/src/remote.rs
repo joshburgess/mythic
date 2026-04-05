@@ -102,9 +102,74 @@ fn read_cache(path: &Path, ttl: Duration) -> Option<Value> {
     serde_json::from_str(&content).ok()
 }
 
+fn is_private_host(host: &str) -> bool {
+    let host_lower = host.to_lowercase();
+
+    // Block obvious private hostnames
+    if host_lower == "localhost"
+        || host_lower == "[::1]"
+        || host_lower == "0.0.0.0"
+        || host_lower.ends_with(".local")
+        || host_lower.ends_with(".internal")
+    {
+        return true;
+    }
+
+    // Block private IP ranges by pattern
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return is_private_ip(&ip);
+    }
+
+    false
+}
+
+fn is_private_ip(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback() || v6.is_unspecified() || {
+                // Check for IPv6-mapped IPv4 addresses (::ffff:x.x.x.x)
+                let segments = v6.segments();
+                if segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff {
+                    let v4 = std::net::Ipv4Addr::new(
+                        (segments[6] >> 8) as u8,
+                        segments[6] as u8,
+                        (segments[7] >> 8) as u8,
+                        segments[7] as u8,
+                    );
+                    v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
 fn fetch_url(url: &str) -> Result<Value> {
-    let response =
-        reqwest::blocking::get(url).with_context(|| format!("Failed to fetch: {url}"))?;
+    // Validate URL and block private/internal addresses (SSRF prevention)
+    let parsed: reqwest::Url = url.parse().with_context(|| format!("Invalid URL: {url}"))?;
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow::anyhow!("URL has no host: {url}"))?;
+
+    if is_private_host(host) {
+        anyhow::bail!("Blocked request to private/internal address: {url}");
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .with_context(|| "Failed to build HTTP client")?;
+
+    let response = client
+        .get(url)
+        .send()
+        .with_context(|| format!("Failed to fetch: {url}"))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -176,5 +241,89 @@ mod tests {
             Duration::from_secs(3600),
         );
         assert!(cached.is_none());
+    }
+
+    #[test]
+    fn private_ipv4_addresses_blocked() {
+        // Loopback
+        assert!(is_private_host("127.0.0.1"), "127.0.0.1 should be blocked");
+        assert!(is_private_host("127.0.0.2"), "127.0.0.2 should be blocked");
+        // RFC 1918 private ranges
+        assert!(is_private_host("10.0.0.0"), "10.0.0.0 should be blocked");
+        assert!(is_private_host("10.255.255.255"), "10.x should be blocked");
+        assert!(
+            is_private_host("192.168.1.1"),
+            "192.168.1.1 should be blocked"
+        );
+        assert!(
+            is_private_host("172.16.0.1"),
+            "172.16.0.1 should be blocked"
+        );
+        // Link-local
+        assert!(
+            is_private_host("169.254.1.1"),
+            "169.254.x.x should be blocked"
+        );
+        // Unspecified
+        assert!(is_private_host("0.0.0.0"), "0.0.0.0 should be blocked");
+    }
+
+    #[test]
+    fn localhost_and_local_domains_blocked() {
+        assert!(is_private_host("localhost"), "localhost should be blocked");
+        assert!(
+            is_private_host("myhost.local"),
+            ".local domains should be blocked"
+        );
+        assert!(
+            is_private_host("service.internal"),
+            ".internal domains should be blocked"
+        );
+        assert!(is_private_host("[::1]"), "[::1] should be blocked");
+    }
+
+    #[test]
+    fn public_hosts_not_blocked() {
+        assert!(!is_private_host("example.com"), "example.com is public");
+        assert!(!is_private_host("8.8.8.8"), "8.8.8.8 is public");
+        assert!(!is_private_host("1.1.1.1"), "1.1.1.1 is public");
+    }
+
+    #[test]
+    fn ipv6_mapped_ipv4_private_addresses_blocked() {
+        // ::ffff:127.0.0.1 is IPv6-mapped loopback
+        assert!(
+            is_private_host("::ffff:127.0.0.1"),
+            "IPv6-mapped 127.0.0.1 should be blocked"
+        );
+        // ::ffff:10.0.0.1 is IPv6-mapped private
+        assert!(
+            is_private_host("::ffff:10.0.0.1"),
+            "IPv6-mapped 10.0.0.1 should be blocked"
+        );
+        // ::ffff:192.168.1.1 is IPv6-mapped private
+        assert!(
+            is_private_host("::ffff:192.168.1.1"),
+            "IPv6-mapped 192.168.1.1 should be blocked"
+        );
+    }
+
+    #[test]
+    fn ipv6_loopback_blocked() {
+        assert!(
+            is_private_host("::1"),
+            "IPv6 loopback ::1 should be blocked"
+        );
+    }
+
+    #[test]
+    fn fetch_url_blocks_private_addresses() {
+        let result = fetch_url("http://127.0.0.1/secret");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("private") || err.contains("Blocked"),
+            "Error should mention blocking private address, got: {err}"
+        );
     }
 }

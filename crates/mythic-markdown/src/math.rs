@@ -15,12 +15,72 @@ pub fn transform_math(html: &str) -> String {
     // Transform math code blocks: <pre><code class="language-math">...</code></pre>
     result = transform_math_code_blocks(&result);
 
+    // Protect <code>...</code> and <pre>...</pre> from math processing
+    let (protected, code_spans) = protect_code_elements(&result);
+
     // Transform display math ($$...$$) — must come before inline
-    result = transform_display_math(&result);
+    let processed = transform_display_math(&protected);
 
     // Transform inline math ($...$)
-    result = transform_inline_math(&result);
+    let processed = transform_inline_math(&processed);
 
+    // Restore protected code elements
+    result = restore_code_elements(&processed, &code_spans);
+
+    result
+}
+
+/// Replace `<code>...</code>` and `<pre>...</pre>` with placeholders so math
+/// processing doesn't touch their contents.
+fn protect_code_elements(html: &str) -> (String, Vec<String>) {
+    let mut protected = html.to_string();
+    let mut spans: Vec<String> = Vec::new();
+
+    // Protect <pre>...</pre> blocks first (they may contain <code> inside)
+    while let Some(start) = protected.find("<pre") {
+        if let Some(end_tag_start) = protected[start..].find("</pre>") {
+            let end = start + end_tag_start + 6; // len("</pre>")
+            let span = protected[start..end].to_string();
+            let placeholder = format!("\x00CODEPROTECT{}\x00", spans.len());
+            spans.push(span);
+            protected = format!(
+                "{}{}{}",
+                &protected[..start],
+                placeholder,
+                &protected[end..]
+            );
+        } else {
+            break;
+        }
+    }
+
+    // Protect remaining <code>...</code> spans
+    while let Some(start) = protected.find("<code") {
+        if let Some(end_tag_start) = protected[start..].find("</code>") {
+            let end = start + end_tag_start + 7; // len("</code>")
+            let span = protected[start..end].to_string();
+            let placeholder = format!("\x00CODEPROTECT{}\x00", spans.len());
+            spans.push(span);
+            protected = format!(
+                "{}{}{}",
+                &protected[..start],
+                placeholder,
+                &protected[end..]
+            );
+        } else {
+            break;
+        }
+    }
+
+    (protected, spans)
+}
+
+/// Restore placeholders with the original code elements.
+fn restore_code_elements(html: &str, spans: &[String]) -> String {
+    let mut result = html.to_string();
+    for (i, span) in spans.iter().enumerate() {
+        result = result.replace(&format!("\x00CODEPROTECT{}\x00", i), span);
+    }
     result
 }
 
@@ -176,5 +236,39 @@ mod tests {
         let tags = katex_head_tags();
         assert!(tags.contains("katex"));
         assert!(tags.contains("auto-render"));
+    }
+
+    #[test]
+    fn math_inside_code_not_transformed() {
+        let html = "<p>Use <code>$x^2$</code> for math.</p>";
+        let result = transform_math(html);
+        assert!(
+            result.contains("<code>$x^2$</code>"),
+            "Math inside <code> should not be transformed, got: {result}"
+        );
+    }
+
+    #[test]
+    fn math_inside_pre_not_transformed() {
+        let html = "<pre>$$E = mc^2$$</pre>";
+        let result = transform_math(html);
+        assert!(
+            result.contains("<pre>$$E = mc^2$$</pre>"),
+            "Math inside <pre> should not be transformed, got: {result}"
+        );
+    }
+
+    #[test]
+    fn math_outside_code_still_transformed() {
+        let html = "<p>$x^2$ and <code>$y^2$</code></p>";
+        let result = transform_math(html);
+        assert!(
+            result.contains("<span class=\"math math-inline\">x^2</span>"),
+            "Math outside <code> should be transformed, got: {result}"
+        );
+        assert!(
+            result.contains("<code>$y^2$</code>"),
+            "Math inside <code> should not be transformed, got: {result}"
+        );
     }
 }

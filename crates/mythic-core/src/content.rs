@@ -53,6 +53,7 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
     for path in &paths {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read: {}", path.display()))?;
+        let raw = raw.strip_prefix('\u{FEFF}').unwrap_or(&raw).to_string();
 
         let content_hash = hash_state.hash_one(&raw);
 
@@ -60,6 +61,15 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
         let slug = rel.with_extension("").to_string_lossy().replace('\\', "/");
 
         let (mut frontmatter, body) = mythic_markdown_parse_stub(&raw);
+
+        // If title is empty, default to filename stem
+        if frontmatter.title.is_empty() {
+            frontmatter.title = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Untitled")
+                .into();
+        }
 
         // Intern repeated strings to deduplicate heap allocations
         intern_frontmatter(&interner, &mut frontmatter);
@@ -70,6 +80,7 @@ pub fn discover_content(config: &SiteConfig, root: &Path) -> Result<Vec<Page>> {
             frontmatter,
             raw_content: body,
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash,
             toc: Vec::new(),
@@ -105,9 +116,9 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     use crate::page::Frontmatter;
 
     if let Some(after_open) = raw.strip_prefix("---") {
-        if let Some(end) = after_open.find("---") {
+        if let Some(end) = after_open.find("\n---") {
             let yaml_str = &after_open[..end];
-            let body = after_open[end + 3..].trim_start().to_string();
+            let body = after_open[end + 4..].trim_start().to_string();
             if let Ok(fm) = serde_yaml::from_str::<Frontmatter>(yaml_str) {
                 return (fm, body);
             }
@@ -115,9 +126,9 @@ fn mythic_markdown_parse_stub(raw: &str) -> (crate::page::Frontmatter, String) {
     }
 
     if let Some(after_open) = raw.strip_prefix("+++") {
-        if let Some(end) = after_open.find("+++") {
+        if let Some(end) = after_open.find("\n+++") {
             let toml_str = &after_open[..end];
-            let body = after_open[end + 3..].trim_start().to_string();
+            let body = after_open[end + 4..].trim_start().to_string();
             if let Ok(fm) = toml::from_str::<Frontmatter>(toml_str) {
                 return (fm, body);
             }
@@ -432,5 +443,77 @@ mod tests {
             assert_eq!(page.frontmatter.layout.as_deref(), Some("blog"));
             assert_eq!(page.frontmatter.tags.as_ref().unwrap(), &["rust", "web"]);
         }
+    }
+
+    #[test]
+    fn empty_title_defaults_to_filename_stem() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // File with no frontmatter at all — title will be empty
+        std::fs::write(content.join("my-post.md"), "Just body content").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "my-post");
+    }
+
+    #[test]
+    fn empty_title_in_frontmatter_defaults_to_filename_stem() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        std::fs::write(content.join("about.md"), "---\ntitle: \"\"\n---\nBody").unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "about");
+    }
+
+    #[test]
+    fn frontmatter_with_triple_dash_in_yaml_content() {
+        // The `\n---` fix: frontmatter delimiter must start at beginning of line
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+        // YAML value contains "---" but not at the start of a line
+        std::fs::write(
+            content.join("tricky.md"),
+            "---\ntitle: \"A title with --- dashes\"\ndescription: \"Has --- in it\"\n---\nBody text here",
+        )
+        .unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "A title with --- dashes");
+        assert_eq!(pages[0].raw_content, "Body text here");
+    }
+
+    #[test]
+    fn bom_stripped_then_frontmatter_parses_correctly() {
+        // Verify the full chain: BOM is stripped AND frontmatter still parses
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        std::fs::create_dir_all(&content).unwrap();
+
+        // UTF-8 BOM followed by YAML frontmatter with tags
+        let mut data = vec![0xEF, 0xBB, 0xBF];
+        data.extend_from_slice(
+            b"---\ntitle: BOM Test\ntags:\n  - rust\n  - web\n---\nContent after BOM",
+        );
+        std::fs::write(content.join("bom-tags.md"), data).unwrap();
+
+        let config = fixture_config();
+        let pages = discover_content(&config, dir.path()).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].frontmatter.title, "BOM Test");
+        assert_eq!(
+            pages[0].frontmatter.tags.as_ref().unwrap(),
+            &["rust", "web"]
+        );
+        assert_eq!(pages[0].raw_content, "Content after BOM");
     }
 }

@@ -7,19 +7,20 @@ use std::path::Path;
 
 /// Concatenate all `.css` files in the directory (sorted alphabetically).
 pub fn concat_css(styles_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(styles_dir)
-        .with_context(|| format!("Failed to read styles dir: {}", styles_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(styles_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| x == "css")
-                .unwrap_or(false)
+            e.file_type().is_file()
+                && e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| x == "css")
+                    .unwrap_or(false)
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {
@@ -167,5 +168,48 @@ h1 {
         let css = r#"body::after { content: "  hello  world  "; }"#;
         let minified = minify_css(css);
         assert!(minified.contains("\"  hello  world  \""));
+    }
+
+    #[test]
+    fn concat_css_reads_subdirectories_recursively() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("components");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(dir.path().join("main.css"), ".main { color: red; }").unwrap();
+        std::fs::write(sub.join("button.css"), ".btn { color: blue; }").unwrap();
+
+        let result = concat_css(dir.path()).unwrap();
+        assert!(
+            result.contains(".btn { color: blue; }"),
+            "Should read CSS from subdirectories"
+        );
+        assert!(result.contains(".main { color: red; }"));
+    }
+
+    #[test]
+    fn minify_preserves_space_around_colon_in_selectors() {
+        // The colon in pseudo-selectors and property declarations should be preserved
+        let css = "a:hover { color: red; }";
+        let minified = minify_css(css);
+        assert!(
+            minified.contains("a:hover"),
+            "Pseudo-selector colon should be preserved, got: {minified}"
+        );
+        assert!(
+            minified.contains("color: red") || minified.contains("color:red"),
+            "Property value should be preserved, got: {minified}"
+        );
+    }
+
+    #[test]
+    fn hash_is_deterministic_for_same_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = "body { margin: 0; padding: 0; }";
+        let path1 = write_hashed(content, dir.path()).unwrap();
+        let path2 = write_hashed(content, dir.path()).unwrap();
+        assert_eq!(
+            path1, path2,
+            "Same content should always produce the same hashed filename"
+        );
     }
 }

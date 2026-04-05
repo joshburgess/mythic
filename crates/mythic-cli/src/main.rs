@@ -463,6 +463,27 @@ fn format_template_error(err: &anyhow::Error) -> String {
 
 // --- mythic new command ---
 
+fn pluralize_simple(word: &str) -> String {
+    if word.ends_with('z') {
+        format!("{word}zes")
+    } else if word.ends_with("s")
+        || word.ends_with("sh")
+        || word.ends_with("ch")
+        || word.ends_with("x")
+    {
+        format!("{word}es")
+    } else if word.ends_with("y")
+        && !word.ends_with("ay")
+        && !word.ends_with("ey")
+        && !word.ends_with("oy")
+        && !word.ends_with("uy")
+    {
+        format!("{}ies", &word[..word.len() - 1])
+    } else {
+        format!("{word}s")
+    }
+}
+
 fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> Result<()> {
     let site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path.parent().unwrap_or_else(|| Path::new("."));
@@ -483,7 +504,7 @@ fn cmd_new(config_path: &Path, content_type: &str, title: &str, draft: bool) -> 
     let dir = if content_type == "page" {
         content_dir.clone()
     } else {
-        content_dir.join(format!("{content_type}s"))
+        content_dir.join(pluralize_simple(content_type))
     };
 
     std::fs::create_dir_all(&dir)?;
@@ -835,8 +856,12 @@ fn post_build(
     }
 
     // Generate redirect pages from aliases
-    let redirect_count =
-        mythic_core::redirects::generate_redirects(pages, output_dir, &site_config.base_url)?;
+    let redirect_count = mythic_core::redirects::generate_redirects(
+        pages,
+        output_dir,
+        &site_config.base_url,
+        site_config.ugly_urls,
+    )?;
     if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }
@@ -885,6 +910,7 @@ fn post_build(
                             },
                             raw_content: String::new(),
                             rendered_html: None,
+                            body_html: None,
                             output_path: None,
                             content_hash: 0,
                             toc: Vec::new(),
@@ -931,8 +957,38 @@ fn post_build(
             }
 
             // Non-paginated page (listing pages, or terms without pagination)
+            // For listing pages, inject taxonomy terms into the data context
+            let render_data = if page.frontmatter.layout.as_deref() == Some("taxonomy_list") {
+                let taxonomy_data = taxonomies.iter().find(|t| t.config.slug == page.slug);
+                if let Some(taxonomy) = taxonomy_data {
+                    let mut extra_ctx = if let serde_json::Value::Object(ref map) = site_data {
+                        map.clone()
+                    } else {
+                        serde_json::Map::new()
+                    };
+                    let terms_json: Vec<serde_json::Value> = taxonomy
+                        .terms
+                        .iter()
+                        .map(|term| {
+                            serde_json::json!({
+                                "name": term.name,
+                                "slug": term.slug,
+                                "url": format!("/{}/{}/", taxonomy.config.slug, term.slug),
+                                "count": term.pages.len(),
+                            })
+                        })
+                        .collect();
+                    extra_ctx.insert("terms".to_string(), serde_json::Value::Array(terms_json));
+                    serde_json::Value::Object(extra_ctx)
+                } else {
+                    (*site_data).clone()
+                }
+            } else {
+                (*site_data).clone()
+            };
+
             if let Ok(html) =
-                engine.render_full(&page, site_config, Some(assets_value), Some(site_data))
+                engine.render_full(&page, site_config, Some(assets_value), Some(&render_data))
             {
                 let dest = output_dir.join(&page.slug).join("index.html");
                 if let Some(parent) = dest.parent() {
@@ -965,11 +1021,14 @@ fn post_build(
 // --- Dev server ---
 
 async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> Result<()> {
-    let site_config = mythic_core::config::load_config(config_path)?;
+    let mut site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
+
+    // Override base_url to localhost for local development
+    site_config.base_url = format!("http://localhost:{port}");
 
     println!("{}", "Building site...".dimmed());
     if !drafts {
@@ -986,13 +1045,17 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     std::thread::spawn(move || {
         let mut current_config =
             mythic_core::config::load_config(&rebuild_config_path).expect("Failed to load config");
+        current_config.base_url = format!("http://localhost:{port}");
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
             // Re-read config on config changes so template context stays current
             if matches!(event, mythic_server::watcher::WatchEvent::ConfigChanged) {
                 match mythic_core::config::load_config(&rebuild_config_path) {
-                    Ok(cfg) => current_config = cfg,
+                    Ok(mut cfg) => {
+                        cfg.base_url = format!("http://localhost:{port}");
+                        current_config = cfg;
+                    }
                     Err(e) => {
                         eprintln!("  {} {e}", "Config error:".red().bold());
                         continue;
@@ -1156,4 +1219,39 @@ fn extract_embedded_dir(dir: &include_dir::Dir, dest: &Path) -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pluralize_regular_words() {
+        assert_eq!(pluralize_simple("post"), "posts");
+        assert_eq!(pluralize_simple("page"), "pages");
+        assert_eq!(pluralize_simple("tag"), "tags");
+    }
+
+    #[test]
+    fn pluralize_sibilant_endings() {
+        assert_eq!(pluralize_simple("class"), "classes");
+        assert_eq!(pluralize_simple("bush"), "bushes");
+        assert_eq!(pluralize_simple("match"), "matches");
+        assert_eq!(pluralize_simple("box"), "boxes");
+        assert_eq!(pluralize_simple("quiz"), "quizzes");
+    }
+
+    #[test]
+    fn pluralize_consonant_y() {
+        assert_eq!(pluralize_simple("category"), "categories");
+        assert_eq!(pluralize_simple("gallery"), "galleries");
+    }
+
+    #[test]
+    fn pluralize_vowel_y_unchanged() {
+        assert_eq!(pluralize_simple("day"), "days");
+        assert_eq!(pluralize_simple("key"), "keys");
+        assert_eq!(pluralize_simple("boy"), "boys");
+        assert_eq!(pluralize_simple("guy"), "guys");
+    }
 }

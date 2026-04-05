@@ -7,19 +7,20 @@ use std::path::Path;
 
 /// Concatenate all `.js` files in the directory (sorted alphabetically).
 pub fn concat_js(scripts_dir: &Path) -> Result<String> {
-    let mut entries: Vec<_> = std::fs::read_dir(scripts_dir)
-        .with_context(|| format!("Failed to read scripts dir: {}", scripts_dir.display()))?
+    let mut entries: Vec<_> = walkdir::WalkDir::new(scripts_dir)
+        .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| x == "js")
-                .unwrap_or(false)
+            e.file_type().is_file()
+                && e.path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .map(|x| x == "js")
+                    .unwrap_or(false)
         })
         .collect();
 
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut combined = String::new();
     for entry in entries {
@@ -201,5 +202,33 @@ var y = 2;
         let js = "var s = `  hello\n  world  `;";
         let minified = minify_js(js);
         assert!(minified.contains("`  hello\n  world  `"));
+    }
+
+    #[test]
+    fn concat_js_reads_subdirectories_recursively() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("lib");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(dir.path().join("main.js"), "var main = 1;").unwrap();
+        std::fs::write(sub.join("util.js"), "var util = 2;").unwrap();
+
+        let result = concat_js(dir.path()).unwrap();
+        assert!(
+            result.contains("var util = 2;"),
+            "Should read JS from subdirectories"
+        );
+        assert!(result.contains("var main = 1;"));
+    }
+
+    #[test]
+    fn hash_is_deterministic_for_same_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = "var x = 42;";
+        let path1 = write_hashed(content, dir.path()).unwrap();
+        let path2 = write_hashed(content, dir.path()).unwrap();
+        assert_eq!(
+            path1, path2,
+            "Same content should always produce the same hashed filename"
+        );
     }
 }

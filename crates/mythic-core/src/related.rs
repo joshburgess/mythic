@@ -22,7 +22,12 @@ pub struct RelatedPage {
 /// Returns up to `limit` related pages, sorted by relevance score (most shared
 /// tags first). Pages with no tags, or pages that share zero tags with the
 /// target page, are excluded.
-pub fn find_related(page: &Page, all_pages: &[Page], limit: usize) -> Vec<RelatedPage> {
+pub fn find_related(
+    page: &Page,
+    all_pages: &[Page],
+    limit: usize,
+    base_path: &str,
+) -> Vec<RelatedPage> {
     let page_tags: HashSet<String> = page
         .frontmatter
         .tags
@@ -61,7 +66,11 @@ pub fn find_related(page: &Page, all_pages: &[Page], limit: usize) -> Vec<Relate
         .map(|(score, p)| RelatedPage {
             title: p.frontmatter.title.to_string(),
             slug: p.slug.clone(),
-            url: format!("/{}/", p.slug),
+            url: if p.slug == "index" {
+                format!("{}/", base_path)
+            } else {
+                format!("{}/{}/", base_path, p.slug)
+            },
             score,
         })
         .collect()
@@ -89,6 +98,7 @@ mod tests {
             },
             raw_content: String::new(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -103,7 +113,7 @@ mod tests {
             make_page("b", "Page B", &["rust"]),
             make_page("c", "Page C", &["python"]),
         ];
-        let related = find_related(&target, &all, 10);
+        let related = find_related(&target, &all, 10, "");
         assert_eq!(related.len(), 1);
         assert_eq!(related[0].slug, "b");
         assert_eq!(related[0].score, 1);
@@ -117,7 +127,7 @@ mod tests {
             make_page("b", "Page B", &["python"]),
             make_page("c", "Page C", &["go"]),
         ];
-        let related = find_related(&target, &all, 10);
+        let related = find_related(&target, &all, 10, "");
         assert!(related.is_empty());
     }
 
@@ -130,7 +140,7 @@ mod tests {
             make_page("c", "Page C", &["rust", "web"]), // score 2
             make_page("d", "Page D", &["rust", "web", "ssg"]), // score 3
         ];
-        let related = find_related(&target, &all, 10);
+        let related = find_related(&target, &all, 10, "");
         assert_eq!(related.len(), 3);
         assert_eq!(related[0].slug, "d");
         assert_eq!(related[0].score, 3);
@@ -149,7 +159,7 @@ mod tests {
             make_page("c", "Page C", &["web"]),
             make_page("d", "Page D", &["rust", "web"]),
         ];
-        let related = find_related(&target, &all, 2);
+        let related = find_related(&target, &all, 2, "");
         assert_eq!(related.len(), 2);
     }
 
@@ -160,7 +170,7 @@ mod tests {
             make_page("a", "Page A", &["rust"]),
             make_page("b", "Page B", &["rust"]),
         ];
-        let related = find_related(&target, &all, 10);
+        let related = find_related(&target, &all, 10, "");
         assert_eq!(related.len(), 1);
         assert_eq!(related[0].slug, "b");
     }
@@ -172,7 +182,28 @@ mod tests {
             make_page("a", "Page A", &[]),
             make_page("b", "Page B", &["rust"]),
         ];
-        let related = find_related(&target, &all, 10);
+        let related = find_related(&target, &all, 10, "");
         assert!(related.is_empty());
+    }
+
+    #[test]
+    fn index_page_gets_root_url() {
+        let target = make_page("a", "Page A", &["rust"]);
+        let all = vec![
+            make_page("a", "Page A", &["rust"]),
+            make_page("index", "Home", &["rust"]),
+            make_page("b", "Page B", &["rust"]),
+        ];
+        let related = find_related(&target, &all, 10, "");
+        let index_related = related.iter().find(|r| r.slug == "index").unwrap();
+        assert_eq!(
+            index_related.url, "/",
+            "index page URL should be root, not /index/"
+        );
+        let b_related = related.iter().find(|r| r.slug == "b").unwrap();
+        assert_eq!(
+            b_related.url, "/b/",
+            "non-index pages should have normal URL"
+        );
     }
 }

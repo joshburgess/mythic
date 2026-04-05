@@ -598,6 +598,7 @@ mod tests {
             },
             raw_content: String::new(),
             rendered_html: Some("<p>Hello world</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
@@ -703,6 +704,7 @@ mod tests {
             },
             raw_content: "# Hello".to_string(),
             rendered_html: Some("<h1>Hello</h1><p>World</p>".to_string()),
+            body_html: None,
             output_path: None,
             content_hash: 42,
             toc: vec![

@@ -72,6 +72,11 @@ pub struct SiteConfig {
     /// Content linting configuration.
     #[serde(default)]
     pub lint: Option<crate::lint::LintConfig>,
+    /// Base path prefix for all generated URLs. Derived from `base_url` if not
+    /// set explicitly. For `base_url = "https://example.com/blog"`, the derived
+    /// value is `"/blog"`. For root deploys, this is `""`.
+    #[serde(default)]
+    pub base_path: Option<String>,
 }
 
 /// Sass/SCSS compilation configuration.
@@ -92,6 +97,12 @@ pub struct TaxonomyConfig {
     pub slug: String,
     #[serde(default)]
     pub feed: bool,
+    #[serde(default = "default_per_page")]
+    pub per_page: usize,
+}
+
+fn default_per_page() -> usize {
+    10
 }
 
 /// Feed (Atom/RSS) configuration.
@@ -205,7 +216,7 @@ fn default_scripts_dir() -> PathBuf {
 impl SiteConfig {
     /// Create a config suitable for tests.
     pub fn for_testing(title: &str, base_url: &str) -> Self {
-        SiteConfig {
+        let mut config = SiteConfig {
             title: title.into(),
             base_url: base_url.to_string(),
             content_dir: default_content_dir(),
@@ -227,16 +238,60 @@ impl SiteConfig {
             ugly_urls: false,
             remote: Vec::new(),
             lint: None,
+            base_path: None,
+        };
+        config.resolve_base_path();
+        config
+    }
+
+    /// Resolve `base_path` from `base_url` if not explicitly configured.
+    ///
+    /// Given `base_url = "https://example.com/blog"`, derives `"/blog"`.
+    /// Given `base_url = "https://example.com"`, derives `""`.
+    /// An explicit `base_path` in the config file takes precedence.
+    pub fn resolve_base_path(&mut self) {
+        if let Some(ref mut bp) = self.base_path {
+            // Normalize explicit value: strip trailing slash
+            let trimmed = bp.trim_end_matches('/').to_string();
+            *bp = trimmed;
+        } else {
+            // Derive from base_url: extract the path component
+            let path = extract_path_from_url(&self.base_url);
+            self.base_path = Some(path);
         }
     }
+
+    /// Get the resolved base path. Always returns a value after `resolve_base_path`.
+    /// Returns `""` for root deploys, `"/blog"` for subpath deploys, etc.
+    pub fn base_path(&self) -> &str {
+        self.base_path.as_deref().unwrap_or("")
+    }
+}
+
+/// Extract the path component from a URL string.
+/// `"https://example.com/blog/"` → `"/blog"`
+/// `"https://example.com"` → `""`
+/// `"http://localhost:3000"` → `""`
+fn extract_path_from_url(url: &str) -> String {
+    // Find the start of the path (after ://<host>)
+    if let Some(after_scheme) = url.find("://") {
+        let rest = &url[after_scheme + 3..];
+        // Find the first `/` after the host (and optional port)
+        if let Some(slash) = rest.find('/') {
+            let path = &rest[slash..];
+            return path.trim_end_matches('/').to_string();
+        }
+    }
+    String::new()
 }
 
 /// Load site configuration from a TOML file.
 pub fn load_config(path: &Path) -> Result<SiteConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-    let config: SiteConfig = toml::from_str(&content)
+    let mut config: SiteConfig = toml::from_str(&content)
         .with_context(|| format!("Failed to parse config file: {}", path.display()))?;
+    config.resolve_base_path();
     Ok(config)
 }
 
@@ -389,5 +444,75 @@ mod tests {
         let result = load_config(Path::new("/some/path/mythic.toml"));
         let err = result.unwrap_err().to_string();
         assert!(err.contains("/some/path/mythic.toml"));
+    }
+
+    #[test]
+    fn taxonomy_per_page_default() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[[taxonomies]]\nname = \"tags\"\nslug = \"tags\"\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.taxonomies[0].per_page, 10);
+    }
+
+    #[test]
+    fn taxonomy_per_page_custom() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "title = \"T\"\nbase_url = \"http://x.com\"\n\n[[taxonomies]]\nname = \"tags\"\nslug = \"tags\"\nper_page = 25\n").unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.taxonomies[0].per_page, 25);
+    }
+
+    #[test]
+    fn base_path_derived_from_subpath_url() {
+        let config = SiteConfig::for_testing("T", "https://example.com/blog");
+        assert_eq!(config.base_path(), "/blog");
+    }
+
+    #[test]
+    fn base_path_empty_for_root_url() {
+        let config = SiteConfig::for_testing("T", "https://example.com");
+        assert_eq!(config.base_path(), "");
+    }
+
+    #[test]
+    fn base_path_strips_trailing_slash() {
+        let config = SiteConfig::for_testing("T", "https://example.com/blog/");
+        assert_eq!(config.base_path(), "/blog");
+    }
+
+    #[test]
+    fn base_path_handles_deep_paths() {
+        let config = SiteConfig::for_testing("T", "https://example.com/docs/v2");
+        assert_eq!(config.base_path(), "/docs/v2");
+    }
+
+    #[test]
+    fn base_path_empty_for_localhost() {
+        let config = SiteConfig::for_testing("T", "http://localhost:3000");
+        assert_eq!(config.base_path(), "");
+    }
+
+    #[test]
+    fn base_path_explicit_override() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(
+            f,
+            "title = \"T\"\nbase_url = \"https://example.com\"\nbase_path = \"/custom\"\n"
+        )
+        .unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.base_path(), "/custom");
+    }
+
+    #[test]
+    fn base_path_explicit_trailing_slash_normalized() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(
+            f,
+            "title = \"T\"\nbase_url = \"https://example.com\"\nbase_path = \"/custom/\"\n"
+        )
+        .unwrap();
+        let config = load_config(f.path()).unwrap();
+        assert_eq!(config.base_path(), "/custom");
     }
 }

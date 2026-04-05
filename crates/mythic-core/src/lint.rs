@@ -243,6 +243,7 @@ mod tests {
             },
             raw_content: content.to_string(),
             rendered_html: None,
+            body_html: None,
             output_path: None,
             content_hash: 0,
             toc: Vec::new(),
