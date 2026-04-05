@@ -856,8 +856,12 @@ fn post_build(
     }
 
     // Generate redirect pages from aliases
-    let redirect_count =
-        mythic_core::redirects::generate_redirects(pages, output_dir, &site_config.base_url, site_config.ugly_urls)?;
+    let redirect_count = mythic_core::redirects::generate_redirects(
+        pages,
+        output_dir,
+        &site_config.base_url,
+        site_config.ugly_urls,
+    )?;
     if redirect_count > 0 && !quiet {
         println!("  {} {} redirect(s)", "Generated".dimmed(), redirect_count);
     }

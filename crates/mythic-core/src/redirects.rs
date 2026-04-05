@@ -9,7 +9,12 @@ use crate::page::Page;
 ///
 /// For each alias URL, generates an HTML file with a `<meta http-equiv="refresh">`
 /// redirect to the page's canonical URL.
-pub fn generate_redirects(pages: &[Page], output_dir: &Path, base_url: &str, ugly_urls: bool) -> Result<usize> {
+pub fn generate_redirects(
+    pages: &[Page],
+    output_dir: &Path,
+    base_url: &str,
+    ugly_urls: bool,
+) -> Result<usize> {
     let base_url = base_url.trim_end_matches('/');
     let mut count = 0;
 

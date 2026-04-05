@@ -150,8 +150,7 @@ fn is_private_ip(ip: &std::net::IpAddr) -> bool {
 
 fn fetch_url(url: &str) -> Result<Value> {
     // Validate URL and block private/internal addresses (SSRF prevention)
-    let parsed: reqwest::Url =
-        url.parse().with_context(|| format!("Invalid URL: {url}"))?;
+    let parsed: reqwest::Url = url.parse().with_context(|| format!("Invalid URL: {url}"))?;
 
     let host = parsed
         .host_str()
@@ -287,10 +286,7 @@ mod tests {
     fn public_hosts_not_blocked() {
         assert!(!is_private_host("example.com"), "example.com is public");
         assert!(!is_private_host("8.8.8.8"), "8.8.8.8 is public");
-        assert!(
-            !is_private_host("1.1.1.1"),
-            "1.1.1.1 is public"
-        );
+        assert!(!is_private_host("1.1.1.1"), "1.1.1.1 is public");
     }
 
     #[test]
@@ -314,7 +310,10 @@ mod tests {
 
     #[test]
     fn ipv6_loopback_blocked() {
-        assert!(is_private_host("::1"), "IPv6 loopback ::1 should be blocked");
+        assert!(
+            is_private_host("::1"),
+            "IPv6 loopback ::1 should be blocked"
+        );
     }
 
     #[test]

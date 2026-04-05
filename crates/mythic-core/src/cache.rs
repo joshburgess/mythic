@@ -332,7 +332,10 @@ mod tests {
         std::fs::write(tmpl_dir.join("base.html"), "<html>v2</html>").unwrap();
         let hash2 = crate::cache::compute_env_hash(root, &config);
 
-        assert_ne!(hash1, hash2, "env_hash should change when a template file changes");
+        assert_ne!(
+            hash1, hash2,
+            "env_hash should change when a template file changes"
+        );
     }
 
     #[test]

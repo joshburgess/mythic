@@ -43,7 +43,12 @@ fn protect_code_elements(html: &str) -> (String, Vec<String>) {
             let span = protected[start..end].to_string();
             let placeholder = format!("\x00CODEPROTECT{}\x00", spans.len());
             spans.push(span);
-            protected = format!("{}{}{}", &protected[..start], placeholder, &protected[end..]);
+            protected = format!(
+                "{}{}{}",
+                &protected[..start],
+                placeholder,
+                &protected[end..]
+            );
         } else {
             break;
         }
@@ -56,7 +61,12 @@ fn protect_code_elements(html: &str) -> (String, Vec<String>) {
             let span = protected[start..end].to_string();
             let placeholder = format!("\x00CODEPROTECT{}\x00", spans.len());
             spans.push(span);
-            protected = format!("{}{}{}", &protected[..start], placeholder, &protected[end..]);
+            protected = format!(
+                "{}{}{}",
+                &protected[..start],
+                placeholder,
+                &protected[end..]
+            );
         } else {
             break;
         }

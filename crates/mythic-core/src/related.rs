@@ -22,7 +22,12 @@ pub struct RelatedPage {
 /// Returns up to `limit` related pages, sorted by relevance score (most shared
 /// tags first). Pages with no tags, or pages that share zero tags with the
 /// target page, are excluded.
-pub fn find_related(page: &Page, all_pages: &[Page], limit: usize, base_path: &str) -> Vec<RelatedPage> {
+pub fn find_related(
+    page: &Page,
+    all_pages: &[Page],
+    limit: usize,
+    base_path: &str,
+) -> Vec<RelatedPage> {
     let page_tags: HashSet<String> = page
         .frontmatter
         .tags
@@ -191,8 +196,14 @@ mod tests {
         ];
         let related = find_related(&target, &all, 10, "");
         let index_related = related.iter().find(|r| r.slug == "index").unwrap();
-        assert_eq!(index_related.url, "/", "index page URL should be root, not /index/");
+        assert_eq!(
+            index_related.url, "/",
+            "index page URL should be root, not /index/"
+        );
         let b_related = related.iter().find(|r| r.slug == "b").unwrap();
-        assert_eq!(b_related.url, "/b/", "non-index pages should have normal URL");
+        assert_eq!(
+            b_related.url, "/b/",
+            "non-index pages should have normal URL"
+        );
     }
 }
