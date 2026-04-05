@@ -197,16 +197,11 @@ Cargo workspace with six crates:
 |-------|---------|
 | `mythic-core` | Config, content discovery, build pipeline, caching, plugins |
 | `mythic-markdown` | Frontmatter, markdown rendering, shortcodes, syntax highlighting |
-| `mythic-template` | Tera + Handlebars multi-engine rendering |
+| `mythic-template` | Tera + Handlebars + MiniJinja multi-engine rendering |
 | `mythic-assets` | Image processing, CSS/JS bundling, Sass compilation |
 | `mythic-server` | Dev server (axum), file watcher, WebSocket live reload |
 | `mythic-cli` | CLI binary (clap) |
 
 ## License
 
-Licensed under either of
-
-- [Apache License, Version 2.0](LICENSE-APACHE)
-- [MIT License](LICENSE-MIT)
-
-at your option.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE).
