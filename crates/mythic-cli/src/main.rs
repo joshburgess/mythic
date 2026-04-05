@@ -575,9 +575,17 @@ fn full_build(
     let collections_data = {
         let pre_pages = mythic_core::content::discover_content(site_config, root)?;
 
-        let all_pages_json: Vec<serde_json::Value> = pre_pages
+        let mut filtered_pages: Vec<_> = pre_pages
             .iter()
             .filter(|p| !p.frontmatter.draft.unwrap_or(false) || drafts)
+            .collect();
+        filtered_pages.sort_by(|a, b| {
+            let da = a.frontmatter.date.as_deref().unwrap_or("");
+            let db = b.frontmatter.date.as_deref().unwrap_or("");
+            db.cmp(da) // newest first
+        });
+        let all_pages_json: Vec<serde_json::Value> = filtered_pages
+            .iter()
             .map(|p| {
                 serde_json::json!({
                     "title": p.frontmatter.title.as_str(),
