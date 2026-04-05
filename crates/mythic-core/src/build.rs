@@ -183,9 +183,13 @@ where
         }
         if ugly_urls {
             // Flat output: slug "blog/post" → output_dir/blog/post.html
-            // No per-page directory creation needed.
             let file = output_dir.join(format!("{}.html", page.slug));
             let dir = file.parent().unwrap_or(&output_dir).to_path_buf();
+            to_write.push(WriteJob { page, dir, file });
+        } else if page.slug == "index" {
+            // Root index page: output_dir/index.html (not index/index.html)
+            let file = output_dir.join("index.html");
+            let dir = output_dir.to_path_buf();
             to_write.push(WriteJob { page, dir, file });
         } else {
             // Clean URLs: slug "blog/post" → output_dir/blog/post/index.html
