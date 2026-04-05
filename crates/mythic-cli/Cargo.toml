@@ -13,11 +13,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
-mythic-core = { path = "../mythic-core", version = "0.1.0" }
-mythic-markdown = { path = "../mythic-markdown", version = "0.1.0" }
-mythic-template = { path = "../mythic-template", version = "0.1.0" }
-mythic-assets = { path = "../mythic-assets", version = "0.1.0" }
-mythic-server = { path = "../mythic-server", version = "0.1.0" }
+mythic-core = { path = "../mythic-core", version = "0.1.1" }
+mythic-markdown = { path = "../mythic-markdown", version = "0.1.1" }
+mythic-template = { path = "../mythic-template", version = "0.1.1" }
+mythic-assets = { path = "../mythic-assets", version = "0.1.1" }
+mythic-server = { path = "../mythic-server", version = "0.1.1" }
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
 serde_json.workspace = true
