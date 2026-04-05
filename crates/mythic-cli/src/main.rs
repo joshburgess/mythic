@@ -670,14 +670,26 @@ fn full_build(
     for w in &asset_warnings {
         eprintln!("  {} {w}", "warning:".yellow().bold());
     }
+    // Prepend base_path to asset paths for subpath deployments
+    let base_path = site_config.base_path();
     let mut template_extra = serde_json::Map::new();
     template_extra.insert(
         "css_path".to_string(),
-        serde_json::to_value(&assets_manifest.css_path)?,
+        serde_json::to_value(
+            &assets_manifest
+                .css_path
+                .as_ref()
+                .map(|p| format!("{base_path}{p}")),
+        )?,
     );
     template_extra.insert(
         "js_path".to_string(),
-        serde_json::to_value(&assets_manifest.js_path)?,
+        serde_json::to_value(
+            &assets_manifest
+                .js_path
+                .as_ref()
+                .map(|p| format!("{base_path}{p}")),
+        )?,
     );
     let assets_value = serde_json::Value::Object(template_extra);
 
@@ -1029,6 +1041,8 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
 
     // Override base_url to localhost for local development
     site_config.base_url = format!("http://localhost:{port}");
+    site_config.base_path = None;
+    site_config.resolve_base_path();
 
     println!("{}", "Building site...".dimmed());
     if !drafts {
@@ -1046,6 +1060,8 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
         let mut current_config =
             mythic_core::config::load_config(&rebuild_config_path).expect("Failed to load config");
         current_config.base_url = format!("http://localhost:{port}");
+        current_config.base_path = None;
+        current_config.resolve_base_path();
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
@@ -1054,6 +1070,8 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
                 match mythic_core::config::load_config(&rebuild_config_path) {
                     Ok(mut cfg) => {
                         cfg.base_url = format!("http://localhost:{port}");
+                        cfg.base_path = None;
+                        cfg.resolve_base_path();
                         current_config = cfg;
                     }
                     Err(e) => {
