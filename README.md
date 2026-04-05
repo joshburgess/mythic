@@ -64,7 +64,7 @@ Everything you need for a production site, with no plugins or external tools req
 
 **Content** — Markdown with YAML/TOML frontmatter, syntax highlighting, shortcodes, table of contents, admonitions (`> [!NOTE]`), math rendering (KaTeX), and render hooks for links and images.
 
-**Templates** — Tera and Handlebars side by side in the same project. Custom filters for reading time, word count, and Hugo-compatible helpers.
+**Templates** — Tera, Handlebars, and MiniJinja side by side in the same project. Custom filters for reading time, word count, and Hugo-compatible helpers.
 
 **Assets** — Image optimization with automatic WebP generation and responsive `<picture>` tags. CSS/JS bundling and minification. Sass/SCSS compilation. SRI integrity hashes.
 
@@ -105,7 +105,7 @@ mythic completions <shell>      Generate shell completions
 my-site/
   mythic.toml          # Site configuration
   content/             # Markdown content with frontmatter
-  templates/           # Tera (.html) and Handlebars (.hbs) templates
+  templates/           # Tera (.html), Handlebars (.hbs), and MiniJinja (.jinja) templates
   _data/               # YAML/TOML/JSON data files
   static/              # Static assets (copied as-is)
   styles/              # CSS/SCSS files (bundled + minified)

@@ -26,13 +26,13 @@ $ mythic build
 
 ### Multi-Engine Templates
 
-Choose between **Tera** and **Handlebars** for your templates, or use both in the same project. Mythic auto-detects the engine from file extensions:
+Choose between **Tera**, **Handlebars**, and **MiniJinja** for your templates, or mix them in the same project. Mythic auto-detects the engine from file extensions:
 
 ```
 templates/
   base.tera.html      # Tera template
   post.hbs.html       # Handlebars template
-  page.tera.html      # Tera template
+  page.jinja.html     # MiniJinja template
 ```
 
 ### Incremental Builds

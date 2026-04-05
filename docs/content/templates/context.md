@@ -89,7 +89,7 @@ The rendered HTML content of the current page. This is the Markdown body convert
 </div>
 ```
 
-Always use `safe` (Tera) or triple curly braces (Handlebars) to prevent HTML escaping.
+Always use `safe` (Tera/MiniJinja) or triple curly braces (Handlebars) to prevent HTML escaping.
 
 ## toc
 

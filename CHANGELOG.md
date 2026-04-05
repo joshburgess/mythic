@@ -5,7 +5,7 @@ All notable changes to Mythic will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- Full build pipeline: content discovery, frontmatter parsing (YAML/TOML), markdown rendering (pulldown-cmark with GFM), template application (Tera + Handlebars), file output with clean URLs
+- Full build pipeline: content discovery, frontmatter parsing (YAML/TOML), markdown rendering (pulldown-cmark with GFM), template application (Tera + Handlebars + MiniJinja), file output with clean URLs
 - Incremental builds with content-hash caching (`.mythic-cache.json`)
 - Dev server with WebSocket live reload, CSS hot injection, and DOM reconciliation
 - File watcher with 200ms debouncing for content, template, and config changes
@@ -23,7 +23,7 @@ All notable changes to Mythic will be documented in this file.
 - Built-in ReadingTimePlugin
 - Migration tools for Jekyll, Hugo, and Eleventy
 - Link checker with internal link validation, alt text warnings, heading hierarchy checks
-- Multi-engine templates: Tera (.html, .tera) and Handlebars (.hbs) side by side
+- Multi-engine templates: Tera (.html, .tera), Handlebars (.hbs), and MiniJinja (.jinja, .j2, .jinja2) side by side
 - GitHub Action for build and deploy to GitHub Pages
 - Four starter templates: blank, blog, docs, portfolio
 - `mythic init --template <name>` scaffolding
