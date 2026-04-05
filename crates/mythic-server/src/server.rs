@@ -191,7 +191,14 @@ async fn handle_ws(mut socket: WebSocket, mut rx: broadcast::Receiver<ReloadMess
 
 async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Request) -> Response {
     let path = req.uri().path();
-    let mut file_path = state.output_dir.join(path.trim_start_matches('/'));
+
+    // Reject path traversal attempts
+    let path_str = path.trim_start_matches('/');
+    if path_str.contains("..") {
+        return serve_error_page(&state.output_dir, axum::http::StatusCode::FORBIDDEN, "403.html", "Forbidden");
+    }
+
+    let mut file_path = state.output_dir.join(path_str);
 
     // Clean URL resolution:
     //   /           → /index/index.html  or  /index.html
@@ -218,19 +225,20 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
             }
         }
         if !found {
-            return (axum::http::StatusCode::NOT_FOUND, "404 Not Found").into_response();
+            return serve_error_page(&state.output_dir, axum::http::StatusCode::NOT_FOUND, "404.html", "404 Not Found");
         }
     }
 
     if !file_path.exists() || file_path.is_dir() {
-        return (axum::http::StatusCode::NOT_FOUND, "404 Not Found").into_response();
+        return serve_error_page(&state.output_dir, axum::http::StatusCode::NOT_FOUND, "404.html", "404 Not Found");
     }
 
     let content = match std::fs::read(&file_path) {
         Ok(c) => c,
         Err(e) => {
             let msg = format!("500: failed to read {}: {}", file_path.display(), e);
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg).into_response();
+            eprintln!("{msg}");
+            return serve_error_page(&state.output_dir, axum::http::StatusCode::INTERNAL_SERVER_ERROR, "500.html", "Internal Server Error");
         }
     };
 
@@ -244,6 +252,27 @@ async fn file_handler(State(state): State<Arc<AppState>>, req: axum::extract::Re
     }
 
     ([(axum::http::header::CONTENT_TYPE, mime)], content).into_response()
+}
+
+/// Serve a custom error page (e.g., 404.html) if it exists, otherwise return plain text.
+fn serve_error_page(
+    output_dir: &std::path::Path,
+    status: axum::http::StatusCode,
+    page: &str,
+    fallback: &str,
+) -> Response {
+    let custom_page = output_dir.join(page);
+    if custom_page.exists() {
+        if let Ok(content) = std::fs::read(&custom_page) {
+            return (
+                status,
+                [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                content,
+            )
+                .into_response();
+        }
+    }
+    (status, fallback.to_string()).into_response()
 }
 
 fn inject_live_reload(html: &str) -> String {
