@@ -546,6 +546,7 @@ fn full_build(
 
     // --- Pre-build: load data, plugins ---
 
+    let base_path = site_config.base_path().to_string();
     let data_dir = root.join(&site_config.data_dir);
     let mut site_data = mythic_core::data::load_data(&data_dir)?;
 
@@ -576,7 +577,7 @@ fn full_build(
                 serde_json::json!({
                     "title": p.frontmatter.title.as_str(),
                     "slug": &p.slug,
-                    "url": format!("/{}/", p.slug),
+                    "url": format!("{}/{}/", base_path, p.slug),
                     "date": p.frontmatter.date.as_deref(),
                     "tags": p.frontmatter.tags.as_ref().map(|t| t.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
                 })
@@ -597,7 +598,7 @@ fn full_build(
                     .push(serde_json::json!({
                         "title": p.frontmatter.title.as_str(),
                         "slug": &p.slug,
-                        "url": format!("/{}/", p.slug),
+                        "url": format!("{}/{}/", base_path, p.slug),
                         "date": p.frontmatter.date.as_deref(),
                     }));
             }
@@ -671,7 +672,6 @@ fn full_build(
         eprintln!("  {} {w}", "warning:".yellow().bold());
     }
     // Prepend base_path to asset paths for subpath deployments
-    let base_path = site_config.base_path();
     let mut template_extra = serde_json::Map::new();
     template_extra.insert(
         "css_path".to_string(),
@@ -843,6 +843,7 @@ fn post_build(
         assets_value,
         engine,
     } = ctx;
+    let base_path = site_config.base_path();
     // Detect duplicate slugs
     {
         let mut seen = std::collections::HashMap::new();
@@ -985,7 +986,7 @@ fn post_build(
                             serde_json::json!({
                                 "name": term.name,
                                 "slug": term.slug,
-                                "url": format!("/{}/{}/", taxonomy.config.slug, term.slug),
+                                "url": format!("{}/{}/{}/", base_path, taxonomy.config.slug, term.slug),
                                 "count": term.pages.len(),
                             })
                         })

@@ -254,6 +254,13 @@ impl TemplateEngine {
         let mut ctx = base_ctx.clone();
 
         // Build page context: frontmatter fields plus computed url/slug
+        // Extract base_path from the shared context's site object
+        let bp = ctx
+            .get("site")
+            .and_then(|s| s.get("base_path"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
         let mut page_ctx = serde_json::to_value(&page.frontmatter)
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
         if let serde_json::Value::Object(ref mut map) = page_ctx {
@@ -263,7 +270,7 @@ impl TemplateEngine {
             );
             map.insert(
                 "url".to_string(),
-                serde_json::Value::String(format!("/{}/", page.slug)),
+                serde_json::Value::String(format!("{}/{}/", bp, page.slug)),
             );
         }
         ctx.insert("page", &page_ctx);
@@ -287,6 +294,7 @@ impl TemplateEngine {
         site_data: Option<&serde_json::Value>,
     ) -> Result<String> {
         let template_name = format!("{layout}.hbs");
+        let bp = extract_base_path(&config.base_url);
 
         let mut data = serde_json::Map::new();
         let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
@@ -297,7 +305,7 @@ impl TemplateEngine {
             );
             map.insert(
                 "url".to_string(),
-                serde_json::Value::String(format!("/{}/", page.slug)),
+                serde_json::Value::String(format!("{}/{}/", bp, page.slug)),
             );
         }
         data.insert("page".to_string(), page_ctx);
@@ -343,12 +351,17 @@ impl TemplateEngine {
     fn render_hbs_from_base(
         &self,
         page: &Page,
-        _base_ctx: &tera::Context,
+        base_ctx: &tera::Context,
         layout: &str,
     ) -> Result<String> {
         // For Handlebars, we can't reuse tera::Context efficiently.
         // This path is only hit for .hbs templates, which is uncommon.
         let template_name = format!("{layout}.hbs");
+        let bp = base_ctx
+            .get("site")
+            .and_then(|s| s.get("base_path"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         let mut data = serde_json::Map::new();
         let mut page_ctx = serde_json::to_value(&page.frontmatter)?;
@@ -359,7 +372,7 @@ impl TemplateEngine {
             );
             map.insert(
                 "url".to_string(),
-                serde_json::Value::String(format!("/{}/", page.slug)),
+                serde_json::Value::String(format!("{}/{}/", bp, page.slug)),
             );
         }
         data.insert("page".to_string(), page_ctx);
