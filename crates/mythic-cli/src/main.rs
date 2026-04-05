@@ -966,11 +966,14 @@ fn post_build(
 // --- Dev server ---
 
 async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> Result<()> {
-    let site_config = mythic_core::config::load_config(config_path)?;
+    let mut site_config = mythic_core::config::load_config(config_path)?;
     let root = config_path
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .to_path_buf();
+
+    // Override base_url to localhost for local development
+    site_config.base_url = format!("http://localhost:{port}");
 
     println!("{}", "Building site...".dimmed());
     if !drafts {
@@ -987,13 +990,17 @@ async fn cmd_serve(config_path: &Path, port: u16, drafts: bool, open: bool) -> R
     std::thread::spawn(move || {
         let mut current_config =
             mythic_core::config::load_config(&rebuild_config_path).expect("Failed to load config");
+        current_config.base_url = format!("http://localhost:{port}");
         while let Ok(event) = watcher.rx.recv() {
             println!("  {} {event:?}", "Change detected:".cyan());
 
             // Re-read config on config changes so template context stays current
             if matches!(event, mythic_server::watcher::WatchEvent::ConfigChanged) {
                 match mythic_core::config::load_config(&rebuild_config_path) {
-                    Ok(cfg) => current_config = cfg,
+                    Ok(mut cfg) => {
+                        cfg.base_url = format!("http://localhost:{port}");
+                        current_config = cfg;
+                    }
                     Err(e) => {
                         eprintln!("  {} {e}", "Config error:".red().bold());
                         continue;
