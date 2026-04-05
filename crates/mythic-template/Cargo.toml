@@ -14,7 +14,7 @@ tera = "1"
 handlebars = "6"
 walkdir = "2"
 pulldown-cmark = { version = "0.12", features = ["html"] }
-mythic-core = { path = "../mythic-core", version = "0.2.0" }
+mythic-core = { path = "../mythic-core", version = "0.2.1" }
 
 [dev-dependencies]
 tempfile = "3"
