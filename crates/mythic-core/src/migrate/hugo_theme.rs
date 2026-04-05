@@ -158,7 +158,9 @@ fn convert_layouts(theme_dir: &Path, output: &Path, report: &mut MigrationReport
         }
 
         // Map Hugo layout conventions to Mythic
-        let target_name = map_layout_name(&rel.to_string_lossy());
+        // Normalize to forward slashes for consistent matching across platforms
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+        let target_name = map_layout_name(&rel_str);
         let target = templates_dir.join(&target_name);
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
