@@ -13,7 +13,7 @@ serde_json.workspace = true
 toml.workspace = true
 serde_yaml.workspace = true
 pulldown-cmark = { version = "0.12", features = ["html"] }
-mythic-core = { path = "../mythic-core", version = "0.2.3" }
+mythic-core = { path = "../mythic-core", version = "0.3.0" }
 rayon = "1"
 syntect = "5"
 tera = "1"

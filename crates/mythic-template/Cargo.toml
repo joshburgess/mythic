@@ -15,7 +15,7 @@ handlebars = "6"
 minijinja = { version = "2", features = ["json"] }
 walkdir = "2"
 pulldown-cmark = { version = "0.12", features = ["html"] }
-mythic-core = { path = "../mythic-core", version = "0.2.3" }
+mythic-core = { path = "../mythic-core", version = "0.3.0" }
 
 [dev-dependencies]
 tempfile = "3"
