@@ -56,7 +56,7 @@ jobs:
         run: |
           ./target/release/mythic init /tmp/smoke-test --template blank
           ./target/release/mythic build --config /tmp/smoke-test/mythic.toml
-          test -f /tmp/smoke-test/public/index/index.html
+          test -f /tmp/smoke-test/public/index.html
 
   docs-site:
     name: Build docs site
@@ -70,5 +70,5 @@ jobs:
         run: ./target/release/mythic build --config docs/mythic.toml
       - name: Verify output
         run: |
-          test -f docs/public/index/index.html
+          test -f docs/public/index.html
           echo "Docs site built: $(find docs/public -name '*.html' | wc -l) pages"
