@@ -933,40 +933,34 @@ fn post_build(
 
             // Non-paginated page (listing pages, or terms without pagination)
             // For listing pages, inject taxonomy terms into the data context
-            let render_data =
-                if page.frontmatter.layout.as_deref() == Some("taxonomy_list") {
-                    let taxonomy_data =
-                        taxonomies.iter().find(|t| t.config.slug == page.slug);
-                    if let Some(taxonomy) = taxonomy_data {
-                        let mut extra_ctx =
-                            if let serde_json::Value::Object(ref map) = site_data {
-                                map.clone()
-                            } else {
-                                serde_json::Map::new()
-                            };
-                        let terms_json: Vec<serde_json::Value> = taxonomy
-                            .terms
-                            .iter()
-                            .map(|term| {
-                                serde_json::json!({
-                                    "name": term.name,
-                                    "slug": term.slug,
-                                    "url": format!("/{}/{}/", taxonomy.config.slug, term.slug),
-                                    "count": term.pages.len(),
-                                })
-                            })
-                            .collect();
-                        extra_ctx.insert(
-                            "terms".to_string(),
-                            serde_json::Value::Array(terms_json),
-                        );
-                        serde_json::Value::Object(extra_ctx)
+            let render_data = if page.frontmatter.layout.as_deref() == Some("taxonomy_list") {
+                let taxonomy_data = taxonomies.iter().find(|t| t.config.slug == page.slug);
+                if let Some(taxonomy) = taxonomy_data {
+                    let mut extra_ctx = if let serde_json::Value::Object(ref map) = site_data {
+                        map.clone()
                     } else {
-                        (*site_data).clone()
-                    }
+                        serde_json::Map::new()
+                    };
+                    let terms_json: Vec<serde_json::Value> = taxonomy
+                        .terms
+                        .iter()
+                        .map(|term| {
+                            serde_json::json!({
+                                "name": term.name,
+                                "slug": term.slug,
+                                "url": format!("/{}/{}/", taxonomy.config.slug, term.slug),
+                                "count": term.pages.len(),
+                            })
+                        })
+                        .collect();
+                    extra_ctx.insert("terms".to_string(), serde_json::Value::Array(terms_json));
+                    serde_json::Value::Object(extra_ctx)
                 } else {
                     (*site_data).clone()
-                };
+                }
+            } else {
+                (*site_data).clone()
+            };
 
             if let Ok(html) =
                 engine.render_full(&page, site_config, Some(assets_value), Some(&render_data))
