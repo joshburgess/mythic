@@ -458,9 +458,10 @@ fn format_template_error(err: &anyhow::Error) -> String {
         return format!("{} {msg}", "Template error:".red().bold());
     }
 
-    // Extract useful info from MiniJinja errors
+    // Extract useful info from MiniJinja errors (include cause chain)
     if msg.contains("Failed to render MiniJinja") || msg.contains("Failed to find MiniJinja") {
-        return format!("{} {msg}", "Template error:".red().bold());
+        let chain: Vec<String> = err.chain().map(|e| e.to_string()).collect();
+        return format!("{} {}", "Template error:".red().bold(), chain.join("\n\nCaused by:\n    "));
     }
 
     msg

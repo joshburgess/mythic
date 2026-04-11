@@ -326,6 +326,31 @@ impl TemplateEngine {
             |value: String| -> Result<String, minijinja::Error> { Ok(value) },
         );
 
+        // Register `now()` for MiniJinja (Tera has this built-in)
+        mj.add_function("now", || -> Result<String, minijinja::Error> {
+            Ok(chrono::Utc::now().to_rfc3339())
+        });
+
+        // Register `date` filter for MiniJinja (Tera has this built-in)
+        // Usage: {{ now() | date(format="%Y") }}
+        mj.add_filter(
+            "date",
+            |value: String, kwargs: minijinja::value::Kwargs| -> Result<String, minijinja::Error> {
+                let fmt: String = kwargs
+                    .get("format")
+                    .unwrap_or_else(|_| "%Y-%m-%d".to_string());
+                kwargs.assert_all_used()?;
+                // Try parsing as RFC3339 first (from now()), then as date-only
+                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&value) {
+                    Ok(dt.format(&fmt).to_string())
+                } else if let Ok(dt) = chrono::NaiveDate::parse_from_str(&value, "%Y-%m-%d") {
+                    Ok(dt.format(&fmt).to_string())
+                } else {
+                    Ok(value)
+                }
+            },
+        );
+
         // Register custom Handlebars helpers (equivalent to Tera/MiniJinja filters)
         hbs.register_helper(
             "reading_time",
@@ -361,6 +386,8 @@ impl TemplateEngine {
             "urlize",
             Box::new(StringTransformHelper(compute_urlize)),
         );
+        hbs.register_helper("now", Box::new(NowHelper));
+        hbs.register_helper("date", Box::new(DateHelper));
 
         Ok(Self {
             tera,
@@ -907,6 +934,57 @@ impl handlebars::HelperDef for LazyValueHelper {
         _: &mut handlebars::RenderContext<'reg, 'rc>,
     ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
         Ok(handlebars::ScopedJson::Derived((*self.0).clone()))
+    }
+}
+
+/// A Handlebars helper that returns the current UTC timestamp as RFC3339.
+/// Usage: `{{now}}` -> "2026-04-11T..."
+struct NowHelper;
+
+impl handlebars::HelperDef for NowHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        _: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        Ok(handlebars::ScopedJson::Derived(serde_json::Value::String(
+            chrono::Utc::now().to_rfc3339(),
+        )))
+    }
+}
+
+/// A Handlebars helper that formats a date string.
+/// Usage: `{{date (now) format="%Y"}}` -> "2026"
+struct DateHelper;
+
+impl handlebars::HelperDef for DateHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        let value = h
+            .param(0)
+            .and_then(|p| p.value().as_str())
+            .unwrap_or("");
+        let fmt = h
+            .hash_get("format")
+            .and_then(|v| v.value().as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| "%Y-%m-%d".to_string());
+        let formatted = if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(value) {
+            dt.format(&fmt).to_string()
+        } else if let Ok(dt) = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d") {
+            dt.format(&fmt).to_string()
+        } else {
+            value.to_string()
+        };
+        Ok(handlebars::ScopedJson::Derived(serde_json::Value::String(
+            formatted,
+        )))
     }
 }
 
