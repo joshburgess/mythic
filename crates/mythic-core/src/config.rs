@@ -338,14 +338,14 @@ mod tests {
     #[test]
     fn missing_required_title_returns_error() {
         let mut f = NamedTempFile::new().unwrap();
-        write!(f, "base_url = \"http://example.com\"\n").unwrap();
+        writeln!(f, "base_url = \"http://example.com\"").unwrap();
         assert!(load_config(f.path()).is_err());
     }
 
     #[test]
     fn missing_required_base_url_returns_error() {
         let mut f = NamedTempFile::new().unwrap();
-        write!(f, "title = \"Test\"\n").unwrap();
+        writeln!(f, "title = \"Test\"").unwrap();
         assert!(load_config(f.path()).is_err());
     }
 

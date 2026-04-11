@@ -2228,4 +2228,204 @@ mod tests {
         assert!(html.contains("one two three..."), "Got: {html}");
         assert!(!html.contains("four"), "Got: {html}");
     }
+
+    // --- Cross-engine parity tests for now(), date, get_pages, and filters ---
+
+    #[test]
+    fn minijinja_now_and_date() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.jinja"),
+            "<html><body>Year: {{ now() | date(format=\"%Y\") }}</body></html>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        let year = chrono::Utc::now().format("%Y").to_string();
+        assert!(html.contains(&format!("Year: {year}")), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_date_with_date_string() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.jinja"),
+            "<html><body>{{ page.date | date(format=\"%B %d, %Y\") }}</body></html>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = full_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("June 15, 2025"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_get_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.jinja"),
+            concat!(
+                "<html><body>",
+                "{% set pages = get_pages() %}",
+                "{% for p in pages %}",
+                "<a>{{ p.title }}</a>",
+                "{% endfor %}",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let mut engine = TemplateEngine::new(dir.path()).unwrap();
+        let pages_data = serde_json::json!([
+            {"title": "First Post", "url": "/first/"},
+            {"title": "Second Post", "url": "/second/"},
+        ]);
+        engine.register_lazy_value("get_pages", pages_data);
+
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("First Post"), "Got: {html}");
+        assert!(html.contains("Second Post"), "Got: {html}");
+    }
+
+    #[test]
+    fn handlebars_now_and_date() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.hbs"),
+            "<html><body>Year: {{date (now) format=\"%Y\"}}</body></html>",
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        let year = chrono::Utc::now().format("%Y").to_string();
+        assert!(html.contains(&format!("Year: {year}")), "Got: {html}");
+    }
+
+    #[test]
+    fn handlebars_get_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.hbs"),
+            concat!(
+                "<html><body>",
+                "{{#each (get_pages)}}",
+                "<a>{{this.title}}</a>",
+                "{{/each}}",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let mut engine = TemplateEngine::new(dir.path()).unwrap();
+        let pages_data = serde_json::json!([
+            {"title": "HBS First", "url": "/first/"},
+            {"title": "HBS Second", "url": "/second/"},
+        ]);
+        engine.register_lazy_value("get_pages", pages_data);
+
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("HBS First"), "Got: {html}");
+        assert!(html.contains("HBS Second"), "Got: {html}");
+    }
+
+    #[test]
+    fn minijinja_custom_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.jinja"),
+            concat!(
+                "<html><body>",
+                "<p>{{ content | reading_time }}</p>",
+                "<p>{{ content | word_count }}</p>",
+                "<p>{{ content | plainify }}</p>",
+                "<p>{{ \"my-slug\" | humanize }}</p>",
+                "<p>{{ \"post\" | pluralize }}</p>",
+                "<p>{{ \"posts\" | singularize }}</p>",
+                "<p>{{ \"My Title\" | urlize }}</p>",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("1 min read"), "Got: {html}");
+        assert!(html.contains("My Slug"), "Got: {html}");
+        assert!(html.contains("posts"), "Got: {html}");
+        assert!(html.contains("post"), "Got: {html}");
+        assert!(html.contains("my-title"), "Got: {html}");
+    }
+
+    #[test]
+    fn handlebars_custom_filters() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.hbs"),
+            concat!(
+                "<html><body>",
+                "<p>{{reading_time content}}</p>",
+                "<p>{{word_count content}}</p>",
+                "<p>{{humanize \"my-slug\"}}</p>",
+                "<p>{{pluralize \"post\"}}</p>",
+                "<p>{{singularize \"posts\"}}</p>",
+                "<p>{{urlize \"My Title\"}}</p>",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let engine = TemplateEngine::new(dir.path()).unwrap();
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("1 min read"), "Got: {html}");
+        assert!(html.contains("My Slug"), "Got: {html}");
+        assert!(html.contains("posts"), "Got: {html}");
+        assert!(html.contains("post"), "Got: {html}");
+        assert!(html.contains("my-title"), "Got: {html}");
+    }
+
+    #[test]
+    fn tera_get_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("default.html"),
+            concat!(
+                "<html><body>",
+                "{% set pages = get_pages() %}",
+                "{% for p in pages %}",
+                "<a>{{ p.title }}</a>",
+                "{% endfor %}",
+                "</body></html>",
+            ),
+        )
+        .unwrap();
+
+        let mut engine = TemplateEngine::new(dir.path()).unwrap();
+        let pages_data = serde_json::json!([
+            {"title": "Tera First", "url": "/first/"},
+            {"title": "Tera Second", "url": "/second/"},
+        ]);
+        engine.register_lazy_value("get_pages", pages_data);
+
+        let page = test_page("default");
+        let config = test_config();
+        let html = engine.render(&page, &config).unwrap();
+        assert!(html.contains("Tera First"), "Got: {html}");
+        assert!(html.contains("Tera Second"), "Got: {html}");
+    }
 }

@@ -314,7 +314,7 @@ mod tests {
         )
         .unwrap();
 
-        let report = migrate(src.path(), out.path()).unwrap();
+        let _report = migrate(src.path(), out.path()).unwrap();
         let config = std::fs::read_to_string(out.path().join("mythic.toml")).unwrap();
         assert!(config.contains("Hugo YAML Site"));
     }

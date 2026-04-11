@@ -107,7 +107,6 @@ impl FileWatcher {
 mod tests {
     use super::*;
     use mythic_core::config::SiteConfig;
-    use std::path::PathBuf;
 
     fn test_config() -> SiteConfig {
         SiteConfig::for_testing("Test", "http://localhost")
