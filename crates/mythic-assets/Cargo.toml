@@ -10,7 +10,7 @@ repository.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-mythic-core = { path = "../mythic-core", version = "0.3.1" }
+mythic-core = { path = "../mythic-core", version = "0.3.2" }
 image = "0.25"
 rayon = "1"
 walkdir = "2"

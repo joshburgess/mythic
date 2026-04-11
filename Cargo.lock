@@ -1896,7 +1896,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-assets"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -1913,7 +1913,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-cli"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1935,7 +1935,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1955,7 +1955,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-markdown"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "mythic-core",
@@ -1972,7 +1972,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-server"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -1989,7 +1989,7 @@ dependencies = [
 
 [[package]]
 name = "mythic-template"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "handlebars",
