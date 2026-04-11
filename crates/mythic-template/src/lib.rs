@@ -326,6 +326,42 @@ impl TemplateEngine {
             |value: String| -> Result<String, minijinja::Error> { Ok(value) },
         );
 
+        // Register custom Handlebars helpers (equivalent to Tera/MiniJinja filters)
+        hbs.register_helper(
+            "reading_time",
+            Box::new(StringTransformHelper(compute_reading_time)),
+        );
+        hbs.register_helper(
+            "word_count",
+            Box::new(StringToNumberHelper(compute_word_count)),
+        );
+        hbs.register_helper("truncate_words", Box::new(TruncateWordsHelper));
+        // Hugo compatibility helpers
+        hbs.register_helper(
+            "markdownify",
+            Box::new(StringTransformHelper(compute_markdownify)),
+        );
+        hbs.register_helper(
+            "plainify",
+            Box::new(StringTransformHelper(compute_plainify)),
+        );
+        hbs.register_helper(
+            "humanize",
+            Box::new(StringTransformHelper(compute_humanize)),
+        );
+        hbs.register_helper(
+            "pluralize",
+            Box::new(StringTransformHelper(compute_pluralize)),
+        );
+        hbs.register_helper(
+            "singularize",
+            Box::new(StringTransformHelper(compute_singularize)),
+        );
+        hbs.register_helper(
+            "urlize",
+            Box::new(StringTransformHelper(compute_urlize)),
+        );
+
         Ok(Self {
             tera,
             hbs,
@@ -335,17 +371,36 @@ impl TemplateEngine {
         })
     }
 
-    /// Register a lazy Tera function that returns a cached value on demand.
+    /// Register a lazy function that returns a cached value on demand.
     /// Used for large data like collections (pages, sections) that should only
     /// be materialized when a template actually accesses them, avoiding O(n²)
     /// cloning overhead in per-page rendering.
+    ///
+    /// Registered across all three engines:
+    /// - Tera: `{% set pages = get_pages() %}`
+    /// - MiniJinja: `{% set pages = get_pages() %}`
+    /// - Handlebars: `{{#each (get_pages)}}...{{/each}}`
     pub fn register_lazy_value(&mut self, name: &str, value: serde_json::Value) {
-        let cached = Arc::new(tera::to_value(&value).unwrap_or(tera::Value::Null));
+        // Tera: register as a callable function
+        let cached_tera = Arc::new(tera::to_value(&value).unwrap_or(tera::Value::Null));
         self.tera.register_function(
             name,
             move |_args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
-                Ok((*cached).clone())
+                Ok((*cached_tera).clone())
             },
+        );
+
+        // MiniJinja: register as a callable function
+        let cached_mj = minijinja::value::Value::from_serialize(&value);
+        self.mj.add_function(name.to_string(), move || -> Result<minijinja::value::Value, minijinja::Error> {
+            Ok(cached_mj.clone())
+        });
+
+        // Handlebars: register as a helper returning the cached value
+        let cached_hbs = Arc::new(value);
+        self.hbs.register_helper(
+            name,
+            Box::new(LazyValueHelper(cached_hbs)),
         );
     }
 
@@ -833,6 +888,94 @@ fn extract_base_path(base_url: &str) -> String {
     match without_scheme.find('/') {
         Some(pos) => without_scheme[pos..].trim_end_matches('/').to_string(),
         None => String::new(),
+    }
+}
+
+// --- Handlebars helpers ---
+
+/// A Handlebars helper that returns a cached JSON value.
+/// Used by `register_lazy_value` so that collections like `get_pages` are
+/// available as subexpressions: `{{#each (get_pages)}}...{{/each}}`
+struct LazyValueHelper(Arc<serde_json::Value>);
+
+impl handlebars::HelperDef for LazyValueHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        _: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        Ok(handlebars::ScopedJson::Derived((*self.0).clone()))
+    }
+}
+
+/// A Handlebars helper that applies a string -> string transformation.
+/// Used to provide filter-like helpers: `{{reading_time content}}`
+struct StringTransformHelper(fn(&str) -> String);
+
+impl handlebars::HelperDef for StringTransformHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        let text = h
+            .param(0)
+            .and_then(|p| p.value().as_str())
+            .unwrap_or("");
+        Ok(handlebars::ScopedJson::Derived(
+            serde_json::Value::String((self.0)(text)),
+        ))
+    }
+}
+
+/// A Handlebars helper that applies a string -> usize transformation.
+/// Used for helpers like `{{word_count content}}`.
+struct StringToNumberHelper(fn(&str) -> usize);
+
+impl handlebars::HelperDef for StringToNumberHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        let text = h
+            .param(0)
+            .and_then(|p| p.value().as_str())
+            .unwrap_or("");
+        Ok(handlebars::ScopedJson::Derived(serde_json::json!(
+            (self.0)(text)
+        )))
+    }
+}
+
+/// A Handlebars helper for `{{truncate_words content count=20}}`.
+struct TruncateWordsHelper;
+
+impl handlebars::HelperDef for TruncateWordsHelper {
+    fn call_inner<'reg: 'rc, 'rc>(
+        &self,
+        h: &handlebars::Helper<'rc>,
+        _: &'reg handlebars::Handlebars<'reg>,
+        _: &'rc handlebars::Context,
+        _: &mut handlebars::RenderContext<'reg, 'rc>,
+    ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
+        let text = h
+            .param(0)
+            .and_then(|p| p.value().as_str())
+            .unwrap_or("");
+        let count = h
+            .hash_get("count")
+            .and_then(|v| v.value().as_u64())
+            .unwrap_or(20) as usize;
+        Ok(handlebars::ScopedJson::Derived(serde_json::Value::String(
+            compute_truncate_words(text, count),
+        )))
     }
 }
 

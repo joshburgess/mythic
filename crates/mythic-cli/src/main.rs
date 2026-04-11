@@ -651,8 +651,8 @@ fn full_build(
     let mut engine =
         mythic_template::TemplateEngine::new_with_default(&template_dir, default_engine)?;
 
-    // Register collections as lazy Tera functions — only materialized when called.
-    // This eliminates the O(n²) clone overhead for templates that don't use collections.
+    // Register collections as lazy functions across all template engines.
+    // Only materialized when called, eliminating the O(n²) clone overhead.
     if let serde_json::Value::Object(ref coll) = collections_data {
         if let Some(pages_val) = coll.get("pages") {
             engine.register_lazy_value("get_pages", pages_val.clone());
