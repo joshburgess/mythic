@@ -382,10 +382,7 @@ impl TemplateEngine {
             "singularize",
             Box::new(StringTransformHelper(compute_singularize)),
         );
-        hbs.register_helper(
-            "urlize",
-            Box::new(StringTransformHelper(compute_urlize)),
-        );
+        hbs.register_helper("urlize", Box::new(StringTransformHelper(compute_urlize)));
         hbs.register_helper("now", Box::new(NowHelper));
         hbs.register_helper("date", Box::new(DateHelper));
 
@@ -419,16 +416,15 @@ impl TemplateEngine {
 
         // MiniJinja: register as a callable function
         let cached_mj = minijinja::value::Value::from_serialize(&value);
-        self.mj.add_function(name.to_string(), move || -> Result<minijinja::value::Value, minijinja::Error> {
-            Ok(cached_mj.clone())
-        });
+        self.mj.add_function(
+            name.to_string(),
+            move || -> Result<minijinja::value::Value, minijinja::Error> { Ok(cached_mj.clone()) },
+        );
 
         // Handlebars: register as a helper returning the cached value
         let cached_hbs = Arc::new(value);
-        self.hbs.register_helper(
-            name,
-            Box::new(LazyValueHelper(cached_hbs)),
-        );
+        self.hbs
+            .register_helper(name, Box::new(LazyValueHelper(cached_hbs)));
     }
 
     /// Render a page using its specified layout template.
@@ -967,10 +963,7 @@ impl handlebars::HelperDef for DateHelper {
         _: &'rc handlebars::Context,
         _: &mut handlebars::RenderContext<'reg, 'rc>,
     ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
-        let value = h
-            .param(0)
-            .and_then(|p| p.value().as_str())
-            .unwrap_or("");
+        let value = h.param(0).and_then(|p| p.value().as_str()).unwrap_or("");
         let fmt = h
             .hash_get("format")
             .and_then(|v| v.value().as_str().map(|s| s.to_string()))
@@ -1000,13 +993,10 @@ impl handlebars::HelperDef for StringTransformHelper {
         _: &'rc handlebars::Context,
         _: &mut handlebars::RenderContext<'reg, 'rc>,
     ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
-        let text = h
-            .param(0)
-            .and_then(|p| p.value().as_str())
-            .unwrap_or("");
-        Ok(handlebars::ScopedJson::Derived(
-            serde_json::Value::String((self.0)(text)),
-        ))
+        let text = h.param(0).and_then(|p| p.value().as_str()).unwrap_or("");
+        Ok(handlebars::ScopedJson::Derived(serde_json::Value::String(
+            (self.0)(text),
+        )))
     }
 }
 
@@ -1022,10 +1012,7 @@ impl handlebars::HelperDef for StringToNumberHelper {
         _: &'rc handlebars::Context,
         _: &mut handlebars::RenderContext<'reg, 'rc>,
     ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
-        let text = h
-            .param(0)
-            .and_then(|p| p.value().as_str())
-            .unwrap_or("");
+        let text = h.param(0).and_then(|p| p.value().as_str()).unwrap_or("");
         Ok(handlebars::ScopedJson::Derived(serde_json::json!(
             (self.0)(text)
         )))
@@ -1043,10 +1030,7 @@ impl handlebars::HelperDef for TruncateWordsHelper {
         _: &'rc handlebars::Context,
         _: &mut handlebars::RenderContext<'reg, 'rc>,
     ) -> Result<handlebars::ScopedJson<'rc>, handlebars::RenderError> {
-        let text = h
-            .param(0)
-            .and_then(|p| p.value().as_str())
-            .unwrap_or("");
+        let text = h.param(0).and_then(|p| p.value().as_str()).unwrap_or("");
         let count = h
             .hash_get("count")
             .and_then(|v| v.value().as_u64())
