@@ -243,7 +243,7 @@ Returns an array of all non-draft pages with title, slug, url, date, and tags:
 {% set all_pages = get_pages() %}
 <ul>
 {% for p in all_pages %}
-  <li><a href="{{ p.url }}">{{ p.title }}</a> — {{ p.date }}</li>
+  <li><a href="{{ p.url }}">{{ p.title }}</a> ({{ p.date }})</li>
 {% endfor %}
 </ul>
 ```

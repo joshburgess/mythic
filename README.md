@@ -62,27 +62,27 @@ See [BENCHMARKS.md](BENCHMARKS.md) for full methodology and optimization details
 
 Everything you need for a production site, with no plugins or external tools required:
 
-**Content** — Markdown with YAML/TOML frontmatter, syntax highlighting, shortcodes, table of contents, admonitions (`> [!NOTE]`), math rendering (KaTeX), and render hooks for links and images.
+**Content**: Markdown with YAML/TOML frontmatter, syntax highlighting, shortcodes, table of contents, admonitions (`> [!NOTE]`), math rendering (KaTeX), and render hooks for links and images.
 
-**Templates** — Tera, Handlebars, and MiniJinja side by side in the same project. Custom filters for reading time, word count, and Hugo-compatible helpers.
+**Templates**: Tera, Handlebars, and MiniJinja side by side in the same project. Custom filters for reading time, word count, and Hugo-compatible helpers.
 
-**Assets** — Image optimization with automatic WebP generation and responsive `<picture>` tags. CSS/JS bundling and minification. Sass/SCSS compilation. SRI integrity hashes.
+**Assets**: Image optimization with automatic WebP generation and responsive `<picture>` tags. CSS/JS bundling and minification. Sass/SCSS compilation. SRI integrity hashes.
 
-**Data** — Load YAML, TOML, or JSON from `_data/` files. Directory data cascade. Fetch remote APIs at build time with filesystem caching. Computed frontmatter via Rhai expressions.
+**Data**: Load YAML, TOML, or JSON from `_data/` files. Directory data cascade. Fetch remote APIs at build time with filesystem caching. Computed frontmatter via Rhai expressions.
 
-**SEO** — Sitemap, robots.txt, Schema.org JSON-LD, Atom + RSS + JSON Feed generation (site-wide and per-taxonomy), canonical URLs, and hreflang tags for i18n.
+**SEO**: Sitemap, robots.txt, Schema.org JSON-LD, Atom + RSS + JSON Feed generation (site-wide and per-taxonomy), canonical URLs, and hreflang tags for i18n.
 
-**Quality** — Build-time accessibility auditing (WCAG), link checking, heading hierarchy validation, and configurable content linting (word counts, required fields, orphan detection).
+**Quality**: Build-time accessibility auditing (WCAG), link checking, heading hierarchy validation, and configurable content linting (word counts, required fields, orphan detection).
 
-**Dev experience** — Dev server with WebSocket live reload, CSS injection without full page refresh, and error overlays. Config and template changes trigger automatic rebuilds.
+**Dev experience**: Dev server with WebSocket live reload, CSS injection without full page refresh, and error overlays. Config and template changes trigger automatic rebuilds.
 
 ### Extensible
 
-- **Plugin system** — Rust trait-based hooks plus Rhai scripting for user-defined build logic
-- **Taxonomies** — Tags, categories, and custom taxonomies with paginated listing pages
-- **i18n** — Locale directories, translation files, hreflang tags
-- **Migration tools** — Import existing sites from Jekyll, Hugo, or Eleventy
-- **Custom output formats** — JSON API output alongside HTML
+- **Plugin system**: Rust trait-based hooks plus Rhai scripting for user-defined build logic
+- **Taxonomies**: Tags, categories, and custom taxonomies with paginated listing pages
+- **i18n**: Locale directories, translation files, hreflang tags
+- **Migration tools**: Import existing sites from Jekyll, Hugo, or Eleventy
+- **Custom output formats**: JSON API output alongside HTML
 
 ## Commands
 

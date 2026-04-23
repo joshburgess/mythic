@@ -159,7 +159,7 @@ Mythic validates your `mythic.toml` on every build and emits a warning for any u
   Warning: unrecognized config key `build.template_engne` in mythic.toml
 ```
 
-No action is required to enable this behavior -- it runs automatically.
+No action is required to enable this behavior. It runs automatically.
 
 ## [server]
 
@@ -341,8 +341,8 @@ Fetch external data at build time and make it available in templates as `data.re
 
 | Option | Type    | Default | Description                                            |
 |--------|---------|---------|--------------------------------------------------------|
-| `name` | String  | --      | Key used to access the data in templates               |
-| `url`  | String  | --      | URL to fetch JSON data from                            |
+| `name` | String  | required | Key used to access the data in templates              |
+| `url`  | String  | required | URL to fetch JSON data from                           |
 | `ttl`  | Integer | `3600`  | Cache duration in seconds (0 = fetch every build)      |
 
 ```toml

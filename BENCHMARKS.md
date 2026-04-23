@@ -17,8 +17,8 @@ Benchmark results comparing Mythic against Hugo and Eleventy on identical synthe
 ### Full Build (cold, clean output)
 
 Mythic supports two URL modes:
-- **Clean URLs** (default): each page outputs to `slug/index.html` — produces pretty URLs like `/about/`
-- **Flat URLs** (`ugly_urls = true`): each page outputs to `slug.html` — skips directory creation, faster I/O
+- **Clean URLs** (default): each page outputs to `slug/index.html`, producing pretty URLs like `/about/`
+- **Flat URLs** (`ugly_urls = true`): each page outputs to `slug.html`, skipping directory creation for faster I/O
 
 | Pages  | Mythic (clean URLs) | Mythic (flat URLs) | Hugo     | Eleventy  |
 |-------:|--------------------:|-------------------:|---------:|----------:|
@@ -75,17 +75,17 @@ Run with `cargo bench -p mythic-core`:
 
 **Mythic is faster than Hugo on cold builds at every scale tested.** At 1k pages Mythic is 12% faster; at 10k pages 45% faster. With flat URLs, the advantage grows to 57% at 10k pages.
 
-**Incremental builds are Mythic's standout advantage.** The content-hash cache skips unchanged pages entirely — no re-reading, no re-rendering, no re-templating, no re-writing. At 10,000 pages, an incremental rebuild with no changes completes in 125ms, which is 23x faster than Hugo and 31x faster than Eleventy. This is the workflow developers actually use: edit a file, save, see the result.
+**Incremental builds are Mythic's standout advantage.** The content-hash cache skips unchanged pages entirely: no re-reading, no re-rendering, no re-templating, no re-writing. At 10,000 pages, an incremental rebuild with no changes completes in 125ms, which is 23x faster than Hugo and 31x faster than Eleventy. This is the workflow developers actually use: edit a file, save, see the result.
 
 **Template rendering is near-zero cost.** Collections (page lists, sections) are registered as lazy Tera functions, so per-page template rendering doesn't need to clone large data structures. At 10k pages, the template phase takes 5ms.
 
 **Markdown rendering is extremely fast.** Pulldown-cmark with rayon parallelization renders 10,000 pages in 161ms.
 
-**Config and template changes are detected automatically.** The incremental cache tracks a combined hash of the config file and all template files. When either changes, all pages are rebuilt — no manual cache clearing needed.
+**Config and template changes are detected automatically.** The incremental cache tracks a combined hash of the config file and all template files. When either changes, all pages are rebuilt. No manual cache clearing needed.
 
 ### Why Output I/O Dominates
 
-Mythic's clean URL scheme generates one directory + one `index.html` per page. Each page requires `create_dir` + `File::create` + `write` + implicit `close` — at least 3-4 syscalls per page. At 10,000 pages, that's 40,000+ syscalls. The I/O phase accounts for 83% of build time.
+Mythic's clean URL scheme generates one directory + one `index.html` per page. Each page requires `create_dir` + `File::create` + `write` + implicit `close`, totaling at least 3 to 4 syscalls per page. At 10,000 pages, that's 40,000+ syscalls. The I/O phase accounts for 83% of build time.
 
 **Flat URLs** (`ugly_urls = true`) eliminate per-page directory creation, cutting I/O syscalls roughly in half. This produces the fastest builds: 1,261ms at 10k pages (57% faster than Hugo).
 

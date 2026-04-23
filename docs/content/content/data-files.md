@@ -250,6 +250,6 @@ extra:
 
 ## Performance
 
-Data files are loaded once at build startup and cached in memory. They do not trigger full rebuilds during development -- only templates that reference the changed data file are re-rendered.
+Data files are loaded once at build startup and cached in memory. They do not trigger full rebuilds during development; only templates that reference the changed data file are re-rendered.
 
 Very large data files (hundreds of megabytes) may increase memory usage. If you need to work with large datasets, consider pre-processing them into smaller, focused files.

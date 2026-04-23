@@ -64,7 +64,7 @@ When Mythic builds your site, it generates a `deploy-manifest.json` file in the 
 }
 ```
 
-Use the deploy manifest to implement minimal deployments -- only upload files whose hashes have changed since the last deploy. This dramatically reduces deployment time for large sites.
+Use the deploy manifest to implement minimal deployments that only upload files whose hashes have changed since the last deploy. This dramatically reduces deployment time for large sites.
 
 ## Content Diffing
 

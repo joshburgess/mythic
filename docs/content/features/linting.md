@@ -98,7 +98,7 @@ Warning output:
 
 ## Orphan Page Detection
 
-Mythic automatically detects orphan pages -- content pages that are not linked to from any other page on the site. Orphan pages are often the result of renaming or reorganizing content without updating internal links.
+Mythic automatically detects orphan pages, meaning content pages that are not linked to from any other page on the site. Orphan pages are often the result of renaming or reorganizing content without updating internal links.
 
 Orphan detection runs as part of the lint pass and produces warnings like:
 
@@ -110,7 +110,7 @@ Orphan detection only considers internal links within your content. External bac
 
 ## How Warnings Appear
 
-Lint warnings appear in the build output alongside other build messages. They do not cause the build to fail -- they are informational only.
+Lint warnings appear in the build output alongside other build messages. They do not cause the build to fail; they are informational only.
 
 ```
   Loading site...

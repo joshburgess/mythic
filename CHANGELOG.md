@@ -53,7 +53,7 @@ All notable changes to Mythic will be documented in this file.
 - Parallel markdown rendering via rayon
 - Parallel template rendering via rayon
 - Parallel file output with pre-created directory tree
-- True incremental builds: 138ms for 10k unchanged pages (21x faster than Hugo) — skips render, template, and write
+- True incremental builds: 138ms for 10k unchanged pages (21x faster than Hugo), skipping render, template, and write
 - Flat URL mode eliminates per-page mkdir syscalls
 - Content hashing with ahash (fixed seeds for deterministic caching)
 - CompactString for frontmatter fields (inline storage for strings <= 24 bytes)

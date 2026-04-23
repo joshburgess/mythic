@@ -355,7 +355,7 @@ These patterns are converted automatically:
 
 ### Hugo Filters That Work at Runtime
 
-These Hugo filters are registered as Tera filters — converted templates using them work without modification:
+These Hugo filters are registered as Tera filters. Converted templates using them work without modification:
 
 | Hugo Filter | Mythic Equivalent | What It Does |
 |---|---|---|
@@ -418,4 +418,4 @@ Tested against popular Hugo themes:
 | Ananke | 38 | ~85% | Hugo Pipes, dict/slice |
 | Congo | 61 | ~75% | Hugo Pipes, Scratch, dict/slice |
 
-Most manual fixes involve replacing Hugo Pipes with Mythic's `{{ assets.css_path }}` — typically 5-10 lines per theme.
+Most manual fixes involve replacing Hugo Pipes with Mythic's `{{ assets.css_path }}`, typically 5 to 10 lines per theme.

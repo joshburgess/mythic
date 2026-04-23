@@ -164,10 +164,10 @@ Input formats: JPEG, PNG, GIF, WebP, AVIF, SVG, BMP, TIFF.
 
 Output formats (configurable):
 
-- `"webp"` (default) -- good compression, wide support
-- `"avif"` -- better compression, growing support
-- `"jpeg"` -- maximum compatibility
-- `"png"` -- lossless, good for diagrams
+- `"webp"` (default): good compression, wide support
+- `"avif"`: better compression, growing support
+- `"jpeg"`: maximum compatibility
+- `"png"`: lossless, good for diagrams
 
 SVGs are passed through without conversion.
 
